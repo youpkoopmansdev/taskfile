@@ -49,8 +49,7 @@ pub fn select_tasks(tasks: &[DiscoveredTask]) -> Option<Vec<usize>> {
                     selected[n - 1] = true;
                 }
             } else if let Some((start, end)) = part.split_once('-')
-                && let (Ok(s), Ok(e)) =
-                    (start.trim().parse::<usize>(), end.trim().parse::<usize>())
+                && let (Ok(s), Ok(e)) = (start.trim().parse::<usize>(), end.trim().parse::<usize>())
             {
                 for n in s..=e {
                     if n >= 1 && n <= tasks.len() {

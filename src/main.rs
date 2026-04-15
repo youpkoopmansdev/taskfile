@@ -66,7 +66,10 @@ fn main() {
     // Handle --discover (no Taskfile needed)
     if cli.discover {
         let dir = std::env::current_dir().unwrap_or_else(|e| {
-            eprintln!("{} Cannot get current directory: {e}", "error:".red().bold());
+            eprintln!(
+                "{} Cannot get current directory: {e}",
+                "error:".red().bold()
+            );
             process::exit(1);
         });
         discover::run_discover(&dir);

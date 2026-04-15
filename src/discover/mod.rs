@@ -21,12 +21,7 @@ pub fn run_discover(project_dir: &Path) {
     for det in detectors::ALL {
         let tasks = (det.detect)(project_dir);
         if !tasks.is_empty() {
-            eprintln!(
-                "  {} {} ({} tasks)",
-                "✓".green(),
-                det.name,
-                tasks.len()
-            );
+            eprintln!("  {} {} ({} tasks)", "✓".green(), det.name, tasks.len());
             all_tasks.extend(tasks);
         }
     }
