@@ -48,6 +48,15 @@ main() {
   install_binary "task"
   install_binary "taskfile-lsp"
 
+  # Warn if an older task binary shadows the installed one
+  existing=$(command -v task 2>/dev/null || true)
+  if [ -n "$existing" ] && [ "$existing" != "${INSTALL_DIR}/task" ]; then
+    echo ""
+    echo "⚠ Warning: another 'task' binary exists at ${existing}"
+    echo "  It may shadow ${INSTALL_DIR}/task. Remove it with:"
+    echo "    rm ${existing}"
+  fi
+
   echo ""
   echo "✓ Task ${version} installed to ${INSTALL_DIR}/"
   echo "  Binaries: task, taskfile-lsp"
