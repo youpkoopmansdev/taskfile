@@ -166,10 +166,14 @@ Available tasks:
 ```
 task <name> [-- args...]      Run a task
 task --list, -l               List all available tasks
+task --update                 Update to the latest version
+task --update=v0.1.0          Update to a specific version
 task --help, -h               Show help
 task --version, -v            Show version
 task                          Show help + task list
 ```
+
+Task automatically checks for updates once per day and notifies you when a new version is available.
 
 ## Taskfile discovery
 

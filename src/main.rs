@@ -7,6 +7,7 @@ mod resolver;
 mod runner;
 mod script;
 mod suggest;
+mod updater;
 
 use std::process;
 
@@ -15,6 +16,20 @@ use colored::Colorize;
 
 fn main() {
     let cli = cli::Cli::parse();
+
+    // Handle --update before anything else (no Taskfile needed)
+    if let Some(version) = &cli.update {
+        let v = if version.is_empty() {
+            None
+        } else {
+            Some(version.as_str())
+        };
+        updater::self_update(v);
+        return;
+    }
+
+    // Background update check (non-blocking, once per day)
+    updater::check_for_update_background();
 
     let taskfile_path = match discovery::find_taskfile() {
         Some(path) => path,
