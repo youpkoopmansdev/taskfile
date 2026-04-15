@@ -1,0 +1,66 @@
+{
+  "name": "taskfile",
+  "displayName": "Taskfile",
+  "description": "Syntax highlighting and language support for Taskfile files",
+  "version": "0.1.0",
+  "publisher": "youpkoopmansdev",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:taskfile"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "taskfile",
+        "aliases": [
+          "Taskfile",
+          "taskfile"
+        ],
+        "filenames": [
+          "Taskfile"
+        ],
+        "extensions": [
+          ".Taskfile"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "taskfile",
+        "scopeName": "source.taskfile",
+        "path": "./syntaxes/taskfile.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Taskfile",
+      "properties": {
+        "taskfile.lspPath": {
+          "type": "string",
+          "default": "taskfile-lsp",
+          "description": "Path to the taskfile-lsp binary"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}

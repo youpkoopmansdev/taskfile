@@ -1,0 +1,182 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Taskfile",
+  "scopeName": "source.taskfile",
+  "fileTypes": ["Taskfile"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#annotation" },
+    { "include": "#include" },
+    { "include": "#dotenv" },
+    { "include": "#export" },
+    { "include": "#alias" },
+    { "include": "#task" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "(#)(.*)$",
+      "name": "comment.line.number-sign.taskfile",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.taskfile" }
+      }
+    },
+    "annotation": {
+      "patterns": [
+        {
+          "match": "^\\s*(@description)\\s+(.*)",
+          "captures": {
+            "1": { "name": "keyword.other.annotation.taskfile" },
+            "2": { "name": "string.unquoted.description.taskfile" }
+          }
+        },
+        {
+          "match": "^\\s*(@confirm)(?:\\s+(.*))?",
+          "captures": {
+            "1": { "name": "keyword.other.annotation.taskfile" },
+            "2": { "name": "string.unquoted.confirm.taskfile" }
+          }
+        }
+      ]
+    },
+    "include": {
+      "match": "^\\s*(include)\\s+(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "keyword.control.include.taskfile" },
+        "2": { "name": "string.quoted.double.taskfile" }
+      }
+    },
+    "dotenv": {
+      "match": "^\\s*(dotenv)\\s+(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "keyword.control.dotenv.taskfile" },
+        "2": { "name": "string.quoted.double.taskfile" }
+      }
+    },
+    "export": {
+      "match": "^\\s*(export)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(=)\\s*(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "keyword.control.export.taskfile" },
+        "2": { "name": "variable.other.export.taskfile" },
+        "3": { "name": "keyword.operator.assignment.taskfile" },
+        "4": { "name": "string.quoted.double.taskfile" }
+      }
+    },
+    "alias": {
+      "match": "^\\s*(alias)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*(=)\\s*(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "keyword.control.alias.taskfile" },
+        "2": { "name": "entity.name.function.alias.taskfile" },
+        "3": { "name": "keyword.operator.assignment.taskfile" },
+        "4": { "name": "string.quoted.double.taskfile" }
+      }
+    },
+    "task": {
+      "begin": "^\\s*(task)\\s+([A-Za-z_][A-Za-z0-9_-]*)([^{]*)(\\{)",
+      "end": "^\\s*(\\})",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.task.taskfile" },
+        "2": { "name": "entity.name.function.taskfile" },
+        "3": { "patterns": [{ "include": "#task-header" }] },
+        "4": { "name": "punctuation.section.block.begin.taskfile" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.section.block.end.taskfile" }
+      },
+      "name": "meta.task.taskfile",
+      "contentName": "meta.embedded.block.shell",
+      "patterns": [
+        { "include": "source.shell" }
+      ]
+    },
+    "task-header": {
+      "patterns": [
+        { "include": "#task-params" },
+        { "include": "#task-depends" },
+        { "include": "#task-depends-parallel" }
+      ]
+    },
+    "task-params": {
+      "begin": "(\\[)",
+      "end": "(\\])",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.parameters.begin.taskfile" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.parameters.end.taskfile" }
+      },
+      "patterns": [
+        {
+          "match": "([A-Za-z_][A-Za-z0-9_]*)\\s*(=)\\s*(\"[^\"]*\")",
+          "captures": {
+            "1": { "name": "variable.parameter.taskfile" },
+            "2": { "name": "keyword.operator.assignment.taskfile" },
+            "3": { "name": "string.quoted.double.taskfile" }
+          }
+        },
+        {
+          "match": "([A-Za-z_][A-Za-z0-9_]*)",
+          "name": "variable.parameter.taskfile"
+        }
+      ]
+    },
+    "task-depends": {
+      "match": "(depends)\\s*(=)\\s*(\\[)([^\\]]*)(\\])",
+      "captures": {
+        "1": { "name": "keyword.other.depends.taskfile" },
+        "2": { "name": "keyword.operator.assignment.taskfile" },
+        "3": { "name": "punctuation.definition.list.begin.taskfile" },
+        "4": {
+          "patterns": [
+            {
+              "match": "[A-Za-z_][A-Za-z0-9_-]*",
+              "name": "entity.name.function.dependency.taskfile"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.taskfile"
+            }
+          ]
+        },
+        "5": { "name": "punctuation.definition.list.end.taskfile" }
+      }
+    },
+    "task-depends-parallel": {
+      "match": "(depends_parallel)\\s*(=)\\s*(\\[)([^\\]]*)(\\])",
+      "captures": {
+        "1": { "name": "keyword.other.depends.taskfile" },
+        "2": { "name": "keyword.operator.assignment.taskfile" },
+        "3": { "name": "punctuation.definition.list.begin.taskfile" },
+        "4": {
+          "patterns": [
+            {
+              "match": "[A-Za-z_][A-Za-z0-9_-]*",
+              "name": "entity.name.function.dependency.taskfile"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.taskfile"
+            }
+          ]
+        },
+        "5": { "name": "punctuation.definition.list.end.taskfile" }
+      }
+    },
+    "string-double": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.taskfile",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.taskfile" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.taskfile" }
+      },
+      "patterns": [
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.taskfile"
+        }
+      ]
+    }
+  }
+}

@@ -1,2 +1,9 @@
 /target
 .idea/
+
+# Editors
+editors/vscode/node_modules/
+editors/vscode/out/
+editors/vscode/*.vsix
+editors/jetbrains/build/
+editors/jetbrains/.gradle/

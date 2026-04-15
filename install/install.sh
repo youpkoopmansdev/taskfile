@@ -2,10 +2,10 @@
 set -eu
 
 # Task — install script
+# Installs both the task CLI and taskfile-lsp language server
 # Usage: curl -fsSL https://raw.githubusercontent.com/youpkoopmansdev/taskfile/main/install/install.sh | sh
 
 REPO="youpkoopmansdev/taskfile"
-BIN_NAME="task"
 INSTALL_DIR="/usr/local/bin"
 
 main() {
@@ -45,18 +45,29 @@ main() {
     tar -xzf "${tmp}/${filename}" -C "$tmp"
   fi
 
-  if [ -w "$INSTALL_DIR" ]; then
-    mv "${tmp}/${BIN_NAME}" "${INSTALL_DIR}/${BIN_NAME}"
-  else
-    echo "Installing to ${INSTALL_DIR} (requires sudo)..."
-    sudo mv "${tmp}/${BIN_NAME}" "${INSTALL_DIR}/${BIN_NAME}"
-  fi
-
-  chmod +x "${INSTALL_DIR}/${BIN_NAME}"
+  install_binary "task"
+  install_binary "taskfile-lsp"
 
   echo ""
-  echo "✓ Task ${version} installed to ${INSTALL_DIR}/${BIN_NAME}"
+  echo "✓ Task ${version} installed to ${INSTALL_DIR}/"
+  echo "  Binaries: task, taskfile-lsp"
   echo "  Run 'task' in any directory with a Taskfile to get started."
+}
+
+install_binary() {
+  bin="$1"
+  if [ ! -f "${tmp}/${bin}" ]; then
+    echo "  Skipping ${bin} (not found in archive)"
+    return
+  fi
+
+  if [ -w "$INSTALL_DIR" ]; then
+    mv "${tmp}/${bin}" "${INSTALL_DIR}/${bin}"
+  else
+    echo "Installing ${bin} to ${INSTALL_DIR} (requires sudo)..."
+    sudo mv "${tmp}/${bin}" "${INSTALL_DIR}/${bin}"
+  fi
+  chmod +x "${INSTALL_DIR}/${bin}"
 }
 
 fetch_latest_version() {

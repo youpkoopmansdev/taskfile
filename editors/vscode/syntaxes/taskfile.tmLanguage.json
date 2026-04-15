@@ -1,0 +1,147 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Taskfile",
+  "scopeName": "source.taskfile",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#annotation" },
+    { "include": "#task-definition" },
+    { "include": "#export-statement" },
+    { "include": "#alias-statement" },
+    { "include": "#include-statement" },
+    { "include": "#dotenv-statement" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.taskfile"
+    },
+    "annotation": {
+      "patterns": [
+        {
+          "match": "^\\s*(@description)\\b(.*)",
+          "captures": {
+            "1": { "name": "keyword.other.annotation.taskfile" },
+            "2": { "name": "string.unquoted.description.taskfile" }
+          }
+        },
+        {
+          "match": "^\\s*(@confirm)\\b(.*)",
+          "captures": {
+            "1": { "name": "keyword.other.annotation.taskfile" },
+            "2": { "name": "string.unquoted.confirm.taskfile" }
+          }
+        }
+      ]
+    },
+    "task-definition": {
+      "begin": "^\\s*(task)\\s+([a-zA-Z_][\\w-]*)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.task.taskfile" },
+        "2": { "name": "entity.name.function.taskfile" }
+      },
+      "end": "^\\s*(\\})",
+      "endCaptures": {
+        "1": { "name": "punctuation.section.block.end.taskfile" }
+      },
+      "patterns": [
+        { "include": "#task-depends" },
+        { "include": "#task-params" },
+        { "include": "#task-body" }
+      ]
+    },
+    "task-params": {
+      "begin": "\\[",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.parameters.begin.taskfile" }
+      },
+      "end": "\\]",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.parameters.end.taskfile" }
+      },
+      "patterns": [
+        {
+          "match": "([a-zA-Z_][\\w-]*)\\s*(=)\\s*(\"[^\"]*\")",
+          "captures": {
+            "1": { "name": "variable.parameter.taskfile" },
+            "2": { "name": "keyword.operator.assignment.taskfile" },
+            "3": { "name": "string.quoted.double.taskfile" }
+          }
+        },
+        {
+          "match": "[a-zA-Z_][\\w-]*",
+          "name": "variable.parameter.taskfile"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.parameter.taskfile"
+        }
+      ]
+    },
+    "task-depends": {
+      "begin": "(depends_parallel|depends)\\s*(=)\\s*(\\[)",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.depends.taskfile" },
+        "2": { "name": "keyword.operator.assignment.taskfile" },
+        "3": { "name": "punctuation.definition.list.begin.taskfile" }
+      },
+      "end": "\\]",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.list.end.taskfile" }
+      },
+      "patterns": [
+        {
+          "match": "[a-zA-Z_][\\w-]*",
+          "name": "entity.name.function.dependency.taskfile"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.list.taskfile"
+        }
+      ]
+    },
+    "task-body": {
+      "begin": "\\{\\s*$",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.block.begin.taskfile" }
+      },
+      "end": "(?=^\\s*\\})",
+      "contentName": "meta.embedded.block.shell",
+      "patterns": [
+        { "include": "source.shell" }
+      ]
+    },
+    "export-statement": {
+      "match": "^\\s*(export)\\s+([a-zA-Z_]\\w*)\\s*(=)\\s*(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "keyword.control.export.taskfile" },
+        "2": { "name": "variable.other.export.taskfile" },
+        "3": { "name": "keyword.operator.assignment.taskfile" },
+        "4": { "name": "string.quoted.double.taskfile" }
+      }
+    },
+    "alias-statement": {
+      "match": "^\\s*(alias)\\s+([a-zA-Z_][\\w-]*)\\s*(=)\\s*(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "keyword.control.alias.taskfile" },
+        "2": { "name": "entity.name.function.alias.taskfile" },
+        "3": { "name": "keyword.operator.assignment.taskfile" },
+        "4": { "name": "string.quoted.double.taskfile" }
+      }
+    },
+    "include-statement": {
+      "match": "^\\s*(include)\\s+(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "keyword.control.include.taskfile" },
+        "2": { "name": "string.quoted.double.include.taskfile" }
+      }
+    },
+    "dotenv-statement": {
+      "match": "^\\s*(dotenv)\\s+(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "keyword.control.dotenv.taskfile" },
+        "2": { "name": "string.quoted.double.include.taskfile" }
+      }
+    }
+  }
+}

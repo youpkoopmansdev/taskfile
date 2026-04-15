@@ -1,53 +1,82 @@
-# AGENTS.md — Taskfile CLI
+# AGENTS.md — Taskfile
 
 ## Project Overview
 
 **Task** is a modern, per-project task runner CLI written in Rust. It reads `Taskfile` files (a custom format) from the current directory or parent directories. Think of it as Make's task running + bashrc/zshrc expressiveness, scoped per-project.
 
-- **Binary name:** `task`
-- **Crate name:** `task` (Cargo.toml `name = "task"`)
-- **Current version:** 0.5.0
+This is a **monorepo** containing the CLI, LSP server, and IDE plugins.
+
+- **Binaries:** `task` (CLI), `taskfile-lsp` (language server)
+- **Current version:** 0.6.0
 - **Rust edition:** 2024
 - **Repository:** `github.com/youpkoopmansdev/taskfile`
-- **Companion LSP project:** `github.com/youpkoopmansdev/taskfile-lsp`
+- **Cargo workspace:** root package (`task`) + `lsp-server` member (`taskfile-lsp`)
 
 ## Architecture
 
 ```
-src/
-  main.rs          — Entry point, CLI dispatch (clap::Parser, completions, update, discovery, execution)
-  cli.rs           — Clap derive arg definitions (Cli struct)
+Cargo.toml           — Workspace root + task CLI package
+src/                 — Task CLI source
+  main.rs            — Entry point, CLI dispatch (clap::Parser, completions, update, discovery, execution)
+  cli.rs             — Clap derive arg definitions (Cli struct)
   parser/
-    mod.rs         — Hand-written line-by-line parser: parse(input, filepath) -> Result<Ast>
-    ast.rs         — AST node types (Task, Param, Alias, Export, Include, DotEnv)
-    error.rs       — ParseError with file path + line number (syntax and IO variants)
-  resolver.rs      — Processes includes, builds flat HashMap<String, ResolvedTask> with namespace prefixes
-  executor.rs      — Resolves dependencies (sequential + parallel), handles @confirm, builds script, runs via subprocess
-  runner.rs        — TaskRunner trait (Send + Sync) + BashRunner implementation
-  script.rs        — Assembles bash preamble (set -euo pipefail, dotenv, exports, aliases-as-functions, params, body)
-  discovery.rs     — Finds nearest Taskfile by walking up from cwd
-  display.rs       — Artisan-style help output with task list grouped by namespace
-  suggest.rs       — Levenshtein distance for "Did you mean?" suggestions on unknown tasks
+    mod.rs           — Hand-written line-by-line parser: parse(input, filepath) -> Result<Ast>
+    ast.rs           — AST node types (Task, Param, Alias, Export, Include, DotEnv)
+    error.rs         — ParseError with file path + line number (syntax and IO variants)
+  resolver.rs        — Processes includes, builds flat HashMap<String, ResolvedTask> with namespace prefixes
+  executor.rs        — Resolves dependencies (sequential + parallel), handles @confirm, builds script, runs via subprocess
+  runner.rs          — TaskRunner trait (Send + Sync) + BashRunner implementation
+  script.rs          — Assembles bash preamble (set -euo pipefail, dotenv, exports, aliases-as-functions, params, body)
+  discovery.rs       — Finds nearest Taskfile by walking up from cwd
+  display.rs         — Artisan-style help output with task list grouped by namespace
+  suggest.rs         — Levenshtein distance for "Did you mean?" suggestions on unknown tasks
   scaffold.rs      — `--init` Taskfile template generation with interactive prompt
   updater.rs       — Self-update via GitHub releases (curl + tar) with daily background update check
 tests/
   integration.rs   — Integration tests using tempfile directories
 example/
-  Taskfile         — Root example showcasing all features
+  Taskfile           — Root example showcasing all features
   tasks/
     docker.Taskfile
     deploy.Taskfile
 install/
-  install.sh       — Curl-based install script for CI/users
+  install.sh         — Curl-based install script (installs both task + taskfile-lsp)
+
+lsp-server/          — Language Server Protocol server (workspace member)
+  Cargo.toml         — Crate: taskfile-lsp
+  src/
+    main.rs          — Entry point, tower-lsp stdio transport
+    backend.rs       — LanguageServer trait: diagnostics, completions, hover, go-to-def, symbols
+    parser/
+      mod.rs         — Error-recovering parser (never fails, collects diagnostics)
+      ast.rs         — AST types with Span info for all nodes
+
+editors/
+  vscode/            — VS Code extension (TextMate grammar + LSP client)
+    src/extension.ts
+    syntaxes/taskfile.tmLanguage.json
+    package.json
+  jetbrains/         — JetBrains plugin (custom Kotlin lexer + LSP client)
+    build.gradle.kts — Gradle plugin 2.14.0, Kotlin 2.3.20, intellijIdea("2026.1")
+    src/main/kotlin/dev/youpkoopmans/taskfile/
+      TaskfileLexer.kt
+      TaskfileSyntaxHighlighter.kt
+      TaskfileLspServerSupportProvider.kt
+    src/main/resources/META-INF/plugin.xml
 ```
 
 ## Dependencies
 
-**Runtime (Cargo.toml):**
+### CLI (root Cargo.toml)
 - `clap` v4 with `derive` feature — CLI argument parsing
 - `clap_complete` v4 — Shell completion generation
 - `thiserror` v2 — Error derive macros
 - `colored` v3 — Terminal color output
+
+### LSP Server (lsp-server/Cargo.toml)
+- `tower-lsp` v0.20 — LSP framework
+- `tokio` v1 (full) — Async runtime
+- `serde` + `serde_json` v1 — JSON serialization
 
 **Dev only:**
 - `tempfile` v3 — Temporary directories for tests
@@ -133,30 +162,67 @@ task deploy -- --env=production --target=v2.0
 
 ## Testing
 
-- **41 unit tests** across parser, resolver, executor, script, discovery, suggest modules
+- **41 CLI unit tests** across parser, resolver, executor, script, discovery, suggest modules
 - **15 integration tests** in `tests/integration.rs` (use `tempfile` for isolated directories)
-- Run: `cargo test`
-- CI: `cargo fmt --check && cargo clippy -- -D warnings && cargo test`
+- **7 LSP parser tests** in `lsp-server/src/parser/mod.rs`
+- Run all: `cargo test --workspace`
+- CI: `cargo fmt --check --all && cargo clippy --workspace -- -D warnings && cargo test --workspace`
 
 ## CI/CD
 
-- **CI** (`.github/workflows/ci.yml`): fmt + clippy + test on push/PR to main
-- **Release** (`.github/workflows/release.yml`): Triggered by `v*` tags. Builds 5 targets:
-  - linux-x86_64, linux-aarch64 (cross-compiled with `gcc-aarch64-linux-gnu`), macos-x86_64, macos-aarch64, windows-x86_64
-  - Unix: `.tar.gz`, Windows: `.zip`
+- **CI** (`.github/workflows/ci.yml`): Three parallel jobs:
+  - Rust (fmt + clippy + test on ubuntu/macos/windows for full workspace)
+  - VS Code Extension (npm ci + compile)
+  - JetBrains Plugin (Java 21 + Gradle + buildPlugin)
+- **Release** (`.github/workflows/release.yml`): Triggered by `v*` tags. Builds:
+  - `task` + `taskfile-lsp` binaries for 5 targets (linux-x86_64, linux-aarch64, macos-x86_64, macos-aarch64, windows-x86_64)
+  - VS Code extension (.vsix)
+  - JetBrains plugin (.zip)
+  - Each platform archive contains **both** `task` and `taskfile-lsp` binaries
   - Creates GitHub release with auto-generated notes
 
 ## Self-Update Mechanism
 
 - `updater.rs` checks GitHub API for latest release (daily background check via spawned thread)
-- `--update` downloads platform-specific tarball, extracts, replaces current binary (falls back to `sudo cp`)
+- `--update` downloads platform-specific tarball, extracts, replaces **both** `task` and `taskfile-lsp` binaries (falls back to `sudo cp`)
 - Version comparison: semantic version parsing, ignores pre-release tags
+
+## LSP Server
+
+The LSP server (`lsp-server/`) is a **separate Rust crate** in the workspace with its own parser.
+
+### Why two parsers?
+
+| | CLI Parser (`src/parser/`) | LSP Parser (`lsp-server/src/parser/`) |
+|---|---|---|
+| Error handling | `Result<Ast, ParseError>` — fails on first error | Never fails — collects `Vec<Diagnostic>` in AST |
+| Span info | Only `line: usize` on tasks/includes | Full `Span` (start_line, start_col, end_line, end_col) on all nodes |
+| Purpose | Execution (must be correct or fail) | Editor support (must be resilient) |
+
+**If you add a new Taskfile construct, you must update BOTH parsers.**
+
+### LSP features
+
+Diagnostics, completions (keywords + task names in depends), hover (task description/params/deps), go-to-definition (task names + include paths), document symbols.
+
+### JetBrains plugin build config (hard-won knowledge)
+
+| Component | Version | Why |
+|-----------|---------|-----|
+| IntelliJ Platform Gradle Plugin | **2.14.0** | Requires Gradle 9.0+ |
+| Kotlin | **2.3.20** | IntelliJ 2026.1 ships Kotlin 2.3.0 metadata |
+| Gradle | **9.0** | Required by plugin 2.14.0 |
+| Java | **21** | Required for Gradle 9 + Kotlin 2.3 |
+| Platform target | `intellijIdea("2026.1")` | Use `intellijIdea()` not `intellijIdeaCommunity()` |
+
+**Critical:** `com.intellij.modules.lsp` only exists in commercial JetBrains IDEs (RustRover, IntelliJ Ultimate, etc.) — NOT Community Edition.
 
 ## Common Patterns When Modifying
 
-- **Adding a new Taskfile construct:** Update `parser/ast.rs` (add to `Ast` struct), `parser/mod.rs` (parse it), `resolver.rs` (propagate to `ResolvedTask`), `script.rs` (emit in bash script), and tests.
+- **Adding a new Taskfile construct:** Update `src/parser/ast.rs` + `src/parser/mod.rs` (CLI), `lsp-server/src/parser/ast.rs` + `lsp-server/src/parser/mod.rs` (LSP), `resolver.rs`, `script.rs`, `editors/vscode/syntaxes/taskfile.tmLanguage.json`, `editors/jetbrains/.../TaskfileLexer.kt`, and tests.
 - **Adding a CLI flag:** Update `cli.rs` (add field to `Cli`), `main.rs` (handle it), `display.rs` (show in help output).
 - **Adding a new annotation:** Follow the `@description`/`@confirm` pattern — `pending_*` state in the parser that gets consumed by the next `task` line.
+- **Adding a new LSP feature:** Update `ServerCapabilities` in `backend.rs` `initialize()`, implement the trait method. Editor clients pick it up automatically.
 
 ## Gotchas
 
@@ -164,3 +230,5 @@ task deploy -- --env=production --target=v2.0
 - `ResolvedTask` carries the **combined** aliases/exports/dotenv from the entire include chain (parent + own), not just the file's own declarations.
 - Dependencies are resolved from the **same namespace context** — if task `docker:deploy` has `depends=[build]`, it resolves to `docker:build`, not `build`.
 - The `--` separator between CLI flags and task args is a standard Unix convention required by clap's `#[arg(last = true)]`.
+- Never add `bundledPlugin("com.intellij.modules.platform")` to `build.gradle.kts` — it's a plugin.xml `<depends>` module, not a Gradle dependency.
+- The `gradle.properties` must include `kotlin.stdlib.default.dependency = false` to avoid stdlib conflicts with IntelliJ's bundled Kotlin.

@@ -1,0 +1,49 @@
+<idea-plugin>
+    <id>dev.youpkoopmans.taskfile</id>
+    <name>Taskfile</name>
+    <vendor email="info@youpkoopmans.dev" url="https://github.com/youpkoopmansdev/taskfile">youpkoopmansdev</vendor>
+
+    <description><![CDATA[
+    Language support for <a href="https://github.com/youpkoopmansdev/taskfile">Taskfile</a> — a modern task runner.
+    <br/><br/>
+    Features:
+    <ul>
+        <li>Syntax highlighting for Taskfile files</li>
+        <li>Error checking via Language Server Protocol</li>
+        <li>Code completion for keywords and task names</li>
+        <li>Hover documentation for tasks</li>
+        <li>Go to definition for task references and includes</li>
+        <li>Document outline (Structure view)</li>
+    </ul>
+    <br/>
+    Requires the <code>taskfile-lsp</code> binary to be installed for full LSP features.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lsp</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType
+            name="Taskfile"
+            implementationClass="dev.youpkoopmans.taskfile.TaskfileFileType"
+            fieldName="INSTANCE"
+            language="Taskfile"
+            fileNames="Taskfile"
+            patterns="*.Taskfile"
+        />
+
+        <lang.parserDefinition
+            language="Taskfile"
+            implementationClass="dev.youpkoopmans.taskfile.TaskfileParserDefinition"
+        />
+
+        <lang.syntaxHighlighterFactory
+            language="Taskfile"
+            implementationClass="dev.youpkoopmans.taskfile.TaskfileSyntaxHighlighterFactory"
+        />
+
+        <platform.lsp.serverSupportProvider
+            implementation="dev.youpkoopmans.taskfile.TaskfileLspServerSupportProvider"
+        />
+    </extensions>
+</idea-plugin>

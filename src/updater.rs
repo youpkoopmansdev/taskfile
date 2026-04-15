@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
@@ -140,6 +140,33 @@ pub fn self_update(version: Option<&str>) {
                 let _ = fs::remove_dir_all(&tmp_dir);
                 std::process::exit(1);
             }
+        }
+    }
+
+    // Also update taskfile-lsp if it exists in the archive
+    let lsp_bin = tmp_dir.join("taskfile-lsp");
+    if lsp_bin.exists() {
+        let install_dir = current_exe.parent().unwrap_or(Path::new("/usr/local/bin"));
+        let lsp_dest = install_dir.join("taskfile-lsp");
+        if fs::copy(&lsp_bin, &lsp_dest).is_err() {
+            let status = Command::new("sudo")
+                .arg("cp")
+                .arg(&lsp_bin)
+                .arg(&lsp_dest)
+                .status();
+            match status {
+                Ok(s) if s.success() => {
+                    println!("  Also updated {}.", "taskfile-lsp".green());
+                }
+                _ => {
+                    eprintln!(
+                        "{} Could not update taskfile-lsp (non-fatal)",
+                        "warning:".yellow().bold()
+                    );
+                }
+            }
+        } else {
+            println!("  Also updated {}.", "taskfile-lsp".green());
         }
     }
 

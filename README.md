@@ -4,6 +4,8 @@ A modern task runner that reads `Taskfile` files. Think of it as Make's task run
 
 ## Install
 
+Installs both the `task` CLI and `taskfile-lsp` language server:
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/youpkoopmansdev/taskfile/main/install/install.sh | sh
 ```
@@ -12,6 +14,13 @@ Or with Cargo:
 
 ```sh
 cargo install --git https://github.com/youpkoopmansdev/taskfile.git
+cargo install --git https://github.com/youpkoopmansdev/taskfile.git --name taskfile-lsp
+```
+
+To update:
+
+```sh
+task --update
 ```
 
 ## Quick start
@@ -286,6 +295,46 @@ Use `--file` / `-f` to override discovery and point to a specific Taskfile:
 
 ```sh
 task build -f ./other/Taskfile
+```
+
+## Editor support
+
+This repo includes a Language Server Protocol (LSP) server and IDE plugins for syntax highlighting, error checking, completions, hover docs, go-to-definition, and document symbols.
+
+### VS Code
+
+1. Download the `.vsix` file from the [latest release](https://github.com/youpkoopmansdev/taskfile/releases)
+2. In VS Code: `Extensions` → `...` → `Install from VSIX...`
+
+Or search for "Taskfile" in the VS Code Marketplace (once published).
+
+### JetBrains (RustRover, IntelliJ Ultimate, WebStorm, etc.)
+
+1. Download the `taskfile-jetbrains-*.zip` from the [latest release](https://github.com/youpkoopmansdev/taskfile/releases)
+2. In your IDE: `Settings` → `Plugins` → `⚙️` → `Install Plugin from Disk...`
+
+> **Note:** Requires a commercial JetBrains IDE — Community Edition does not support the LSP API.
+
+### Neovim
+
+Add to your LSP config:
+
+```lua
+vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+  pattern = { "Taskfile", "*.Taskfile" },
+  callback = function()
+    vim.bo.filetype = "taskfile"
+    vim.lsp.start({ name = "taskfile-lsp", cmd = { "taskfile-lsp" } })
+  end,
+})
+```
+
+### Other editors
+
+Any editor with LSP support can use `taskfile-lsp`. Start it with:
+
+```sh
+taskfile-lsp   # communicates over stdio
 ```
 
 ## License
