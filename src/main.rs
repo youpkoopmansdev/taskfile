@@ -44,12 +44,13 @@ fn main() {
     }
 
     // Handle --update before anything else (no Taskfile needed)
-    if let Some(version) = &cli.update {
-        let v = if version.is_empty() {
-            None
-        } else {
-            Some(version.as_str())
-        };
+    // Also catch `task -- --update` where clap puts it in task_args
+    if cli.update.is_some() || cli.task_args.iter().any(|a| a == "--update") {
+        let v = cli.update.as_deref().filter(|s| !s.is_empty()).or_else(|| {
+            cli.task_args
+                .iter()
+                .find_map(|a| a.strip_prefix("--update="))
+        });
         updater::self_update(v);
         return;
     }
@@ -64,7 +65,7 @@ fn main() {
     }
 
     // Handle --discover (no Taskfile needed)
-    if cli.discover {
+    if cli.discover || cli.task_args.iter().any(|a| a == "--discover") {
         let dir = std::env::current_dir().unwrap_or_else(|e| {
             eprintln!(
                 "{} Cannot get current directory: {e}",
