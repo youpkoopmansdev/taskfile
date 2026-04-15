@@ -28,6 +28,22 @@ src/                 — Task CLI source
   runner.rs          — TaskRunner trait (Send + Sync) + BashRunner implementation
   script.rs          — Assembles bash preamble (set -euo pipefail, dotenv, exports, aliases-as-functions, params, body)
   discovery.rs       — Finds nearest Taskfile by walking up from cwd
+  discover/          — `--discover` scans project files and interactively generates tasks
+    mod.rs           — Orchestrator: run_discover() ties detectors → prompt → writer
+    detector.rs      — Types: DiscoveredTask, Detector
+    prompt.rs        — Interactive selection UI (numbered list, ranges, cancel)
+    writer.rs        — Taskfile formatting + file I/O + existing task loading
+    json.rs          — Lightweight JSON object extractor (no serde)
+    detectors/
+      mod.rs         — Detector registry (ALL constant) + sanitize_task_name helper
+      node.rs        — package.json: scripts, framework detection, package manager detection
+      rust.rs        — Cargo.toml: build, test, check, release, workspace detection
+      docker.rs      — docker-compose/compose.yml: services, per-service tasks
+      dockerfile.rs  — Dockerfile: build + run (skipped if compose present)
+      makefile.rs    — Makefile: target extraction with recipe bodies
+      go.rs          — go.mod: build, test, vet, cmd/ detection
+      python.rs      — pyproject.toml/requirements.txt: poetry, uv, pip, pytest
+      ruby.rs        — Gemfile: bundler, Rails, RSpec detection
   display.rs         — Artisan-style help output with task list grouped by namespace
   suggest.rs         — Levenshtein distance for "Did you mean?" suggestions on unknown tasks
   scaffold.rs      — `--init` Taskfile template generation with interactive prompt
@@ -126,6 +142,7 @@ task name [param1 param2="default"] depends=[dep1, dep2] depends_parallel=[dep3,
 task <name> [-- args...]      Run a task (args passed as --key=value after --)
 task --list, -l                List all available tasks with descriptions
 task --init                    Create a new Taskfile in current directory
+task --discover                Discover tasks from project files (interactive)
 task --dry-run                 Print generated bash script without executing
 task --file, -f <path>         Use a specific Taskfile path
 task --completions <shell>     Generate shell completions (bash, zsh, fish, powershell, elvish)
@@ -162,7 +179,7 @@ task deploy -- --env=production --target=v2.0
 
 ## Testing
 
-- **41 CLI unit tests** across parser, resolver, executor, script, discovery, suggest modules
+- **52 CLI unit tests** across parser, resolver, executor, script, discovery, suggest, discover modules
 - **15 integration tests** in `tests/integration.rs` (use `tempfile` for isolated directories)
 - **7 LSP parser tests** in `lsp-server/src/parser/mod.rs`
 - Run all: `cargo test --workspace`
@@ -232,3 +249,50 @@ Diagnostics, completions (keywords + task names in depends), hover (task descrip
 - The `--` separator between CLI flags and task args is a standard Unix convention required by clap's `#[arg(last = true)]`.
 - Never add `bundledPlugin("com.intellij.modules.platform")` to `build.gradle.kts` — it's a plugin.xml `<depends>` module, not a Gradle dependency.
 - The `gradle.properties` must include `kotlin.stdlib.default.dependency = false` to avoid stdlib conflicts with IntelliJ's bundled Kotlin.
+
+## SOLID Principles
+
+All code in this project must follow SOLID principles. These are not optional — they are enforced during review.
+
+### Single Responsibility (SRP)
+
+Each file/module/struct has **one reason to change**. Examples:
+
+- `parser/` only parses — it returns an AST, never executes anything.
+- `executor.rs` runs tasks — it doesn't parse or resolve.
+- `discover/` is split into sub-modules: `detector.rs` (types), `prompt.rs` (UI), `writer.rs` (file I/O), `json.rs` (parsing), and one file per detector in `detectors/`. No file exceeds ~180 lines.
+
+**Rule of thumb:** If a file exceeds **300 lines**, it likely has multiple responsibilities and should be split. Most files in this project are under 200 lines.
+
+### Open/Closed (OCP)
+
+Adding new behavior should not require modifying existing code:
+
+- **New detectors:** Create a new file in `discover/detectors/`, implement a `pub fn detect(dir: &Path) -> Vec<DiscoveredTask>`, add it to the `ALL` registry in `detectors/mod.rs`. No other files change.
+- **New Taskfile constructs:** Add to `ast.rs`, extend the parser match arm. Existing constructs are untouched.
+- **New CLI flags:** Add a field to `Cli` struct, add dispatch in `main.rs`. Existing flags are untouched.
+
+### Liskov Substitution (LSP)
+
+- `TaskRunner` trait (`runner.rs`) — `BashRunner` is the only implementation today, but any `Send + Sync` runner can be substituted (e.g., for testing with a mock runner).
+- `Detector` struct uses a function pointer `fn(&Path) -> Vec<DiscoveredTask>` — all detectors are interchangeable.
+
+### Interface Segregation (ISP)
+
+- Modules expose only what callers need. `discover/mod.rs` exports only `run_discover()` — internal types and functions are private.
+- The parser exposes `parse(input, filepath) -> Result<Ast>` — callers don't interact with internal state machines.
+
+### Dependency Inversion (DIP)
+
+- The executor depends on the `TaskRunner` **trait**, not on `BashRunner` directly.
+- Detectors depend on the `DiscoveredTask` **type**, not on the prompt or writer modules.
+- The orchestrator (`discover/mod.rs`) composes independent pieces without them knowing about each other.
+
+### Practical enforcement
+
+When writing new code:
+1. **One file = one responsibility.** If you're adding a new "kind of thing" (detector, formatter, IO handler), make it a new file.
+2. **No God files.** If a file grows past 300 lines, refactor into sub-modules.
+3. **Composition over coupling.** Modules should communicate through types, not reach into each other's internals.
+4. **New features = new files.** Adding a detector? New file. Adding an output format? New file. Don't extend existing files with unrelated logic.
+

@@ -237,6 +237,7 @@ task <name> [-- args...]      Run a task
 task <name> --dry-run         Show the bash script without running it
 task --list, -l               List all available tasks
 task --init                   Create a new Taskfile in the current directory
+task --discover               Discover tasks from project files (interactive)
 task --file, -f <path>        Use a specific Taskfile instead of discovery
 task --completions <shell>    Generate shell completions (bash, zsh, fish, powershell, elvish)
 task --update                 Update to the latest version
@@ -286,6 +287,36 @@ task --init
 This creates a Taskfile with documented examples covering exports, aliases, parameters, dependencies, parallel deps, dotenv, confirm prompts, and includes — everything you need to get started.
 
 If you simply run `task` without a Taskfile, it will interactively ask if you'd like to create one.
+
+## Task discovery
+
+Run `task --discover` to scan your project and interactively generate tasks from existing configuration files:
+
+```sh
+task --discover
+# discover: Scanning /path/to/my-project...
+#
+#   ✓ package.json (Node.js) (8 tasks)
+#   ✓ docker-compose.yml (3 tasks)
+#
+# Select tasks to add:
+#   [1] dev — Start Vue dev server (from package.json)
+#   [2] build — Build for production (from package.json)
+#   ...
+#
+# Selection: 1-5
+# ✓ Added 5 tasks to Taskfile
+```
+
+Supported project files:
+- **package.json** — npm/yarn/pnpm/bun scripts, framework detection (Vue, React, Next, Nuxt)
+- **Cargo.toml** — build, test, check, release (workspace-aware)
+- **docker-compose.yml** / **compose.yaml** — up, down, logs + per-service tasks
+- **Dockerfile** — build and run tasks
+- **Makefile** — ports existing make targets
+- **go.mod** — build, test, vet, lint
+- **pyproject.toml** / **requirements.txt** — Poetry, uv, pip, pytest detection
+- **Gemfile** — Rails, RSpec detection
 
 ## Taskfile discovery
 
