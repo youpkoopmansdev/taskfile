@@ -1,0 +1,19 @@
+alias dc="docker compose"
+
+export COMPOSE_FILE="docker-compose.yml"
+
+@description Start all containers
+task up {
+  echo "Starting containers..."
+  dc up -d
+}
+
+@description Stop all containers
+task down {
+  dc down
+}
+
+@description Tail container logs
+task logs [service="app"] {
+  dc logs -f $service
+}

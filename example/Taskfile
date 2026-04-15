@@ -1,0 +1,26 @@
+# Project task runner
+
+include "tasks/docker.Taskfile"
+include "tasks/deploy.Taskfile"
+
+export PROJECT="myapp"
+export REGION="us-east-1"
+
+alias ll="ls -la"
+
+@description Install dependencies and prepare the project
+task setup {
+  echo "Setting up $PROJECT..."
+  echo "Done."
+}
+
+@description Remove build artifacts
+task clean {
+  echo "Cleaning..."
+  rm -rf target/ dist/
+}
+
+@description Build the project
+task build depends=[clean] {
+  echo "Building $PROJECT..."
+}
