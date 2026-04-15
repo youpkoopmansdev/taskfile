@@ -395,4 +395,103 @@ task c_task {
         assert!(registry.contains_key("c:c_task"));
         assert!(registry.contains_key("b:d:shared"));
     }
+
+    #[test]
+    fn root_aliases_and_exports_cascade_to_children() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tasks_dir = tmp.path().join("tasks");
+        fs::create_dir(&tasks_dir).unwrap();
+
+        fs::write(
+            tmp.path().join("Taskfile"),
+            r#"alias dc="docker compose"
+alias br="bun run"
+export APP_NAME="myapp"
+
+include "tasks/docker.Taskfile"
+include "tasks/node.Taskfile"
+
+task hello {
+  echo "hi"
+}"#,
+        )
+        .unwrap();
+
+        fs::write(
+            tasks_dir.join("docker.Taskfile"),
+            r#"task up {
+  dc up -d
+}"#,
+        )
+        .unwrap();
+
+        fs::write(
+            tasks_dir.join("node.Taskfile"),
+            r#"task dev {
+  dc exec app br dev
+}"#,
+        )
+        .unwrap();
+
+        let registry = resolve(&tmp.path().join("Taskfile")).unwrap();
+
+        // Root task gets root aliases/exports
+        assert_eq!(registry["hello"].aliases.len(), 2);
+        assert_eq!(registry["hello"].exports.len(), 1);
+
+        // Docker child inherits root aliases/exports
+        assert_eq!(registry["docker:up"].aliases.len(), 2);
+        assert_eq!(registry["docker:up"].exports.len(), 1);
+        assert_eq!(registry["docker:up"].aliases[0].name, "dc");
+
+        // Node child inherits root aliases/exports
+        assert_eq!(registry["node:dev"].aliases.len(), 2);
+        assert_eq!(registry["node:dev"].exports.len(), 1);
+    }
+
+    #[test]
+    fn child_aliases_dont_leak_to_siblings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tasks_dir = tmp.path().join("tasks");
+        fs::create_dir(&tasks_dir).unwrap();
+
+        fs::write(
+            tmp.path().join("Taskfile"),
+            r#"include "tasks/a.Taskfile"
+include "tasks/b.Taskfile"
+
+task root {
+  echo "root"
+}"#,
+        )
+        .unwrap();
+
+        fs::write(
+            tasks_dir.join("a.Taskfile"),
+            r#"alias only_in_a="something"
+task a_task {
+  echo "a"
+}"#,
+        )
+        .unwrap();
+
+        fs::write(
+            tasks_dir.join("b.Taskfile"),
+            r#"task b_task {
+  echo "b"
+}"#,
+        )
+        .unwrap();
+
+        let registry = resolve(&tmp.path().join("Taskfile")).unwrap();
+
+        // a gets its own alias
+        assert_eq!(registry["a:a_task"].aliases.len(), 1);
+
+        // b does NOT get a's alias
+        assert_eq!(registry["b:b_task"].aliases.len(), 0);
+
+        // root does NOT get a's alias
+        assert_eq!(registry["root"].aliases.len(), 0);
+    }
 }

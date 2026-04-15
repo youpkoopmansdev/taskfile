@@ -132,9 +132,25 @@ task name [param1 param2="default"] depends=[dep1, dep2] depends_parallel=[dep3,
 ### Namespace and scope rules
 
 - Tasks in root Taskfile have no prefix.
-- Exports, aliases, and dotenv from parent files **cascade down** to included namespaces.
+- **Root inheritance:** Aliases, exports, and dotenv defined in the root Taskfile are injected into ALL task executions across all included files. This enables shared shortcuts (e.g. `alias dc="docker compose"` in root, used in `tasks/node.Taskfile` as `dc exec app ...`).
+- **Downward cascade:** Each parent's aliases/exports/dotenv combine with its children's. A child file gets everything from all ancestors above it.
+- **No sibling leakage:** Aliases defined inside `tasks/a.Taskfile` are NOT available in `tasks/b.Taskfile` — only in `a`'s own tasks and its sub-includes.
 - Include paths are **relative to the file containing the include statement**.
 - Circular includes are detected and return an error. Diamond includes (same file via different paths) are handled by skipping already-processed files.
+
+#### Common pattern: cross-domain tasks
+
+When node tasks need to run through Docker, define shared aliases in root:
+
+```bash
+# Taskfile
+alias dc="docker compose"
+alias br="bun run"
+include "tasks/docker.Taskfile"
+include "tasks/node.Taskfile"
+```
+
+`tasks/node.Taskfile` can then use `dc exec app br dev` — both aliases inherited from root.
 
 ## CLI Interface
 

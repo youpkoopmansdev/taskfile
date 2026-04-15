@@ -147,7 +147,40 @@ include "tasks/deploy.Taskfile"
 
 The filename stem becomes the namespace. A file `tasks/docker.Taskfile` containing `task up {}` registers as `docker:up`.
 
-Exports, aliases, and dotenv from the parent file are inherited by included files.
+#### Root inheritance
+
+Aliases, exports, and dotenv defined in the root Taskfile are **inherited by all included files**. This lets you define shared shortcuts in one place and use them everywhere:
+
+```bash
+# Taskfile (root)
+alias dc="docker compose"
+alias br="bun run"
+export APP_NAME="myapp"
+
+include "tasks/docker.Taskfile"
+include "tasks/node.Taskfile"
+```
+
+```bash
+# tasks/docker.Taskfile — dc alias inherited from root
+task up {
+  dc up -d
+}
+```
+
+```bash
+# tasks/node.Taskfile — dc AND br inherited from root
+task dev {
+  dc exec app br dev
+}
+
+task build {
+  echo "Building $APP_NAME"
+  br build
+}
+```
+
+This mirrors how shell environments work — parent scope flows down. Aliases defined inside an included file only apply to tasks in that file and its own children (they don't leak to siblings).
 
 ## Project structure example
 
@@ -203,7 +236,7 @@ task down {
 Running `task` shows:
 
 ```
-Task 0.6.0
+Task 0.8.0
 
 Usage:
   task <name> [-- args...]
