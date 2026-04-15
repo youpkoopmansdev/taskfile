@@ -289,6 +289,14 @@ This creates a Taskfile with documented examples covering exports, aliases, para
 
 If you simply run `task` without a Taskfile, it will interactively ask if you'd like to create one.
 
+**Smart detection:** If `--init` (or `task` with no Taskfile) detects existing project files (like `package.json`, `Cargo.toml`, `docker-compose.yml`, etc.), it will offer to run `--discover` instead of creating a template — so you get real tasks from day one:
+
+```
+? Project files detected. Run discover to generate tasks from them? [Y/n]
+```
+
+If you decline, it falls back to the template.
+
 ### Existing project
 
 Run `task --discover` to scan your project and generate tasks from files that already exist:

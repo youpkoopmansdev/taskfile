@@ -46,7 +46,7 @@ src/                 — Task CLI source
       ruby.rs        — Gemfile: bundler, Rails, RSpec detection
   display.rs         — Artisan-style help output with task list grouped by namespace
   suggest.rs         — Levenshtein distance for "Did you mean?" suggestions on unknown tasks
-  scaffold.rs      — `--init` Taskfile template generation with interactive prompt
+  scaffold.rs      — `--init` Taskfile creation: detects project files → offers discover, else creates template
   updater.rs       — Self-update via GitHub releases (curl + tar) with daily background update check
 tests/
   integration.rs   — Integration tests using tempfile directories
@@ -141,7 +141,7 @@ task name [param1 param2="default"] depends=[dep1, dep2] depends_parallel=[dep3,
 ```
 task <name> [-- args...]      Run a task (args passed as --key=value after --)
 task --list, -l                List all available tasks with descriptions
-task --init                    Create a new Taskfile in current directory
+task --init                    Create Taskfile (auto-detects project → offers discover)
 task --discover                Discover tasks from project files (interactive)
 task --dry-run                 Print generated bash script without executing
 task --file, -f <path>         Use a specific Taskfile path
@@ -238,10 +238,13 @@ Diagnostics, completions (keywords + task names in depends), hover (task descrip
 
 - **Adding a new Taskfile construct:** Update `src/parser/ast.rs` + `src/parser/mod.rs` (CLI), `lsp-server/src/parser/ast.rs` + `lsp-server/src/parser/mod.rs` (LSP), `resolver.rs`, `script.rs`, `editors/vscode/syntaxes/taskfile.tmLanguage.json`, `editors/jetbrains/.../TaskfileLexer.kt`, and tests.
 - **Adding a CLI flag:** Update `cli.rs` (add field to `Cli`), `main.rs` (handle it), `display.rs` (show in help output).
+- **Adding a new detector:** Create a file in `src/discover/detectors/`, implement `pub fn detect(dir: &Path) -> Vec<DiscoveredTask>`, add it to `ALL` in `detectors/mod.rs`, and add the project file to `PROJECT_FILES` in `scaffold.rs`.
 - **Adding a new annotation:** Follow the `@description`/`@confirm` pattern — `pending_*` state in the parser that gets consumed by the next `task` line.
 - **Adding a new LSP feature:** Update `ServerCapabilities` in `backend.rs` `initialize()`, implement the trait method. Editor clients pick it up automatically.
 
 ## Gotchas
+
+- **`--init` and `task` (no Taskfile) are smart:** `scaffold.rs` checks `PROJECT_FILES` to detect existing projects. If project files are found, it offers `--discover` first. If no project files exist (empty dir), it creates the template directly. Both `create()` (for `--init`) and `prompt_and_create()` (for bare `task`) follow this flow.
 
 - The parser's `count_braces()` function is string-aware and comment-aware — it won't miscount braces inside quoted strings or `# comments`. This is critical for correctness.
 - `ResolvedTask` carries the **combined** aliases/exports/dotenv from the entire include chain (parent + own), not just the file's own declarations.

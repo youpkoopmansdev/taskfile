@@ -1,7 +1,7 @@
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use colored::Colorize;
 
@@ -124,6 +124,43 @@ task nuke {
 # Task body is plain bash — use any shell commands you like.
 "##;
 
+/// Check if the directory looks like an existing project (has recognizable config files).
+fn has_project_files(dir: &Path) -> bool {
+    const PROJECT_FILES: &[&str] = &[
+        "package.json",
+        "Cargo.toml",
+        "go.mod",
+        "pyproject.toml",
+        "requirements.txt",
+        "Gemfile",
+        "Makefile",
+        "Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "compose.yml",
+        "compose.yaml",
+    ];
+    PROJECT_FILES.iter().any(|f| dir.join(f).exists())
+}
+
+/// Ask the user whether to run discover or create a template.
+/// Returns true if discover was chosen and should run.
+fn offer_discover() -> bool {
+    eprint!(
+        "\n{} Project files detected. Run {} to generate tasks from them? [Y/n] ",
+        "?".cyan().bold(),
+        "discover".green()
+    );
+    io::stderr().flush().ok();
+
+    let mut answer = String::new();
+    if io::stdin().read_line(&mut answer).is_err() {
+        return false;
+    }
+    let answer = answer.trim().to_lowercase();
+    answer.is_empty() || answer == "y" || answer == "yes"
+}
+
 /// Create a Taskfile directly (for --init). Returns true on success.
 pub fn create() -> bool {
     let cwd = match env::current_dir() {
@@ -148,6 +185,11 @@ pub fn create() -> bool {
         return false;
     }
 
+    if has_project_files(&cwd) && offer_discover() {
+        crate::discover::run_discover(&cwd);
+        return true;
+    }
+
     if let Err(e) = fs::write(&target, TEMPLATE) {
         eprintln!("{} Could not create Taskfile: {}", "error:".red().bold(), e);
         return false;
@@ -163,19 +205,56 @@ pub fn prompt_and_create() -> Option<PathBuf> {
     let cwd = env::current_dir().ok()?;
     let target = cwd.join("Taskfile");
 
-    eprint!(
-        "{} No Taskfile found. Create one in {}? [Y/n] ",
-        "?".cyan().bold(),
-        cwd.display()
-    );
-    io::stderr().flush().ok();
+    if has_project_files(&cwd) {
+        eprint!(
+            "{} No Taskfile found. Run {} to generate tasks from this project? [Y/n] ",
+            "?".cyan().bold(),
+            "discover".green()
+        );
+        io::stderr().flush().ok();
 
-    let mut answer = String::new();
-    io::stdin().read_line(&mut answer).ok()?;
-    let answer = answer.trim().to_lowercase();
+        let mut answer = String::new();
+        io::stdin().read_line(&mut answer).ok()?;
+        let answer = answer.trim().to_lowercase();
 
-    if !answer.is_empty() && answer != "y" && answer != "yes" {
-        return None;
+        if answer.is_empty() || answer == "y" || answer == "yes" {
+            crate::discover::run_discover(&cwd);
+            let target = cwd.join("Taskfile");
+            if target.exists() {
+                return Some(target);
+            }
+            return None;
+        }
+
+        // User said no to discover — offer template instead
+        eprint!(
+            "{} Create a template Taskfile instead? [y/N] ",
+            "?".cyan().bold()
+        );
+        io::stderr().flush().ok();
+
+        let mut answer2 = String::new();
+        io::stdin().read_line(&mut answer2).ok()?;
+        let answer2 = answer2.trim().to_lowercase();
+
+        if answer2 != "y" && answer2 != "yes" {
+            return None;
+        }
+    } else {
+        eprint!(
+            "{} No Taskfile found. Create one in {}? [Y/n] ",
+            "?".cyan().bold(),
+            cwd.display()
+        );
+        io::stderr().flush().ok();
+
+        let mut answer = String::new();
+        io::stdin().read_line(&mut answer).ok()?;
+        let answer = answer.trim().to_lowercase();
+
+        if !answer.is_empty() && answer != "y" && answer != "yes" {
+            return None;
+        }
     }
 
     if let Err(e) = fs::write(&target, TEMPLATE) {
