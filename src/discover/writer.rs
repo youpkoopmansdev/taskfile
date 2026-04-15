@@ -6,15 +6,15 @@ use colored::Colorize;
 
 use super::detector::DiscoveredTask;
 
-/// Format discovered tasks into Taskfile syntax with inline descriptions.
+/// Format discovered tasks into Taskfile syntax with @description annotations.
 fn format_tasks(tasks: &[&DiscoveredTask]) -> String {
     let mut output = String::new();
     for (i, task) in tasks.iter().enumerate() {
         if i > 0 {
             output.push('\n');
         }
-        let desc = task.description.replace('"', r#"\""#);
-        output.push_str(&format!("task {} \"{}\" {{\n", task.name, desc));
+        output.push_str(&format!("@description {}\n", task.description));
+        output.push_str(&format!("task {} {{\n", task.name));
         for line in task.body.lines() {
             output.push_str(&format!("  {}\n", line));
         }
@@ -28,27 +28,22 @@ fn format_tasks(tasks: &[&DiscoveredTask]) -> String {
 /// - 1 category: writes directly to root Taskfile
 /// - 2+ categories: creates `tasks/{category}.Taskfile` with includes in root
 pub fn write_categorized(project_dir: &Path, groups: &BTreeMap<String, Vec<&DiscoveredTask>>) {
-    if groups.len() <= 1 {
-        let all: Vec<&DiscoveredTask> = groups.values().flat_map(|v| v.iter().copied()).collect();
-        write_to_file(project_dir, &project_dir.join("Taskfile"), &all);
-    } else {
-        let tasks_dir = project_dir.join("tasks");
-        fs::create_dir_all(&tasks_dir).unwrap_or_else(|e| {
-            eprintln!(
-                "{} Cannot create tasks/ directory: {e}",
-                "error:".red().bold()
-            );
-            std::process::exit(1);
-        });
+    let tasks_dir = project_dir.join("tasks");
+    fs::create_dir_all(&tasks_dir).unwrap_or_else(|e| {
+        eprintln!(
+            "{} Cannot create tasks/ directory: {e}",
+            "error:".red().bold()
+        );
+        std::process::exit(1);
+    });
 
-        for (category, tasks) in groups {
-            let filename = format!("{category}.Taskfile");
-            let path = tasks_dir.join(&filename);
-            write_to_file(project_dir, &path, tasks);
-        }
-
-        write_includes(project_dir, groups.keys().collect());
+    for (category, tasks) in groups {
+        let filename = format!("{category}.Taskfile");
+        let path = tasks_dir.join(&filename);
+        write_to_file(project_dir, &path, tasks);
     }
+
+    write_includes(project_dir, groups.keys().collect());
 }
 
 fn write_to_file(project_dir: &Path, path: &Path, tasks: &[&DiscoveredTask]) {
@@ -210,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn format_tasks_inline_description() {
+    fn format_tasks_with_description() {
         let task = DiscoveredTask {
             name: "dev".into(),
             description: "Start dev server".into(),
@@ -218,7 +213,8 @@ mod tests {
             source: "package.json".into(),
         };
         let output = format_tasks(&[&task]);
-        assert!(output.contains("task dev \"Start dev server\" {"));
+        assert!(output.contains("@description Start dev server"));
+        assert!(output.contains("task dev {"));
         assert!(output.contains("  npm run dev"));
     }
 }
