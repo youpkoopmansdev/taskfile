@@ -6,16 +6,81 @@ use colored::Colorize;
 
 use super::detector::DiscoveredTask;
 
+/// Well-known command prefixes that benefit from aliases.
+const ALIAS_CANDIDATES: &[(&str, &str)] = &[
+    ("docker compose", "dc"),
+    ("docker-compose", "dc"),
+    ("bundle exec", "be"),
+    ("poetry run", "poe"),
+    ("npm run", "nr"),
+    ("yarn run", "yr"),
+    ("pnpm run", "pn"),
+    ("bun run", "br"),
+    ("uv run", "ur"),
+];
+
+/// Detect repetitive command prefixes and return aliases to generate.
+fn detect_aliases(tasks: &[&DiscoveredTask]) -> Vec<(String, String)> {
+    let mut aliases = Vec::new();
+
+    for &(prefix, short) in ALIAS_CANDIDATES {
+        let count = tasks
+            .iter()
+            .filter(|t| t.body.lines().any(|l| l.trim().starts_with(prefix)))
+            .count();
+
+        // Only alias if at least 2 tasks share the prefix
+        if count >= 2 {
+            aliases.push((short.to_string(), prefix.to_string()));
+        }
+    }
+
+    aliases
+}
+
+/// Rewrite task bodies to use the generated aliases.
+fn apply_aliases(body: &str, aliases: &[(String, String)]) -> String {
+    let mut result = body.to_string();
+    for (short, prefix) in aliases {
+        result = result
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim_start();
+                if let Some(rest) = trimmed.strip_prefix(prefix.as_str()) {
+                    let indent = &line[..line.len() - trimmed.len()];
+                    format!("{indent}{short}{rest}")
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+    result
+}
+
 /// Format discovered tasks into Taskfile syntax with @description annotations.
+/// Automatically generates aliases for repetitive command prefixes.
 fn format_tasks(tasks: &[&DiscoveredTask]) -> String {
+    let aliases = detect_aliases(tasks);
+
     let mut output = String::new();
+
+    if !aliases.is_empty() {
+        for (short, full) in &aliases {
+            output.push_str(&format!("alias {short}=\"{full}\"\n"));
+        }
+        output.push('\n');
+    }
+
     for (i, task) in tasks.iter().enumerate() {
         if i > 0 {
             output.push('\n');
         }
         output.push_str(&format!("@description {}\n", task.description));
         output.push_str(&format!("task {} {{\n", task.name));
-        for line in task.body.lines() {
+        let body = apply_aliases(&task.body, &aliases);
+        for line in body.lines() {
             output.push_str(&format!("  {}\n", line));
         }
         output.push_str("}\n");
@@ -215,6 +280,47 @@ mod tests {
         let output = format_tasks(&[&task]);
         assert!(output.contains("@description Start dev server"));
         assert!(output.contains("task dev {"));
-        assert!(output.contains("  npm run dev"));
+    }
+
+    #[test]
+    fn auto_aliases_for_repeated_prefix() {
+        let t1 = DiscoveredTask {
+            name: "dev".into(),
+            description: "Dev".into(),
+            body: "bun run dev".into(),
+            source: "".into(),
+        };
+        let t2 = DiscoveredTask {
+            name: "build".into(),
+            description: "Build".into(),
+            body: "bun run build".into(),
+            source: "".into(),
+        };
+        let t3 = DiscoveredTask {
+            name: "lint".into(),
+            description: "Lint".into(),
+            body: "bun run lint".into(),
+            source: "".into(),
+        };
+        let output = format_tasks(&[&t1, &t2, &t3]);
+        assert!(output.contains("alias br=\"bun run\""));
+        assert!(output.contains("  br dev"));
+        assert!(output.contains("  br build"));
+        assert!(output.contains("  br lint"));
+        // Bodies are rewritten but descriptions are untouched
+        assert!(!output.contains("  bun run"));
+    }
+
+    #[test]
+    fn no_alias_for_single_occurrence() {
+        let t1 = DiscoveredTask {
+            name: "up".into(),
+            description: "Up".into(),
+            body: "docker compose up -d".into(),
+            source: "".into(),
+        };
+        let output = format_tasks(&[&t1]);
+        assert!(!output.contains("alias"));
+        assert!(output.contains("  docker compose up -d"));
     }
 }
