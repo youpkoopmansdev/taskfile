@@ -24,6 +24,10 @@ jobs:
         run: cargo clippy --workspace -- -D warnings
       - name: Test
         run: cargo test --workspace
+        if: runner.os != 'Windows'
+      - name: Test (Windows - unit tests only)
+        run: cargo test --workspace --lib
+        if: runner.os == 'Windows'
 
   vscode-extension:
     name: VS Code Extension
