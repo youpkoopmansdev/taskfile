@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use super::super::json::extract_json_object;
-use super::sanitize_task_name;
+use super::{is_valid_task_name, sanitize_task_name};
 use crate::discover::detector::DiscoveredTask;
 
 pub fn detect(dir: &Path) -> Vec<DiscoveredTask> {
@@ -23,6 +23,9 @@ pub fn detect(dir: &Path) -> Vec<DiscoveredTask> {
     let scripts = extract_json_object(&content, "scripts");
     for (name, command) in &scripts {
         let task_name = sanitize_task_name(name);
+        if !is_valid_task_name(&task_name) {
+            continue;
+        }
         tasks.push(DiscoveredTask {
             name: task_name,
             description: format!("Run npm script: {name}"),
