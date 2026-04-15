@@ -5,6 +5,7 @@ mod executor;
 mod parser;
 mod resolver;
 mod runner;
+mod scaffold;
 mod script;
 mod suggest;
 mod updater;
@@ -34,11 +35,19 @@ fn main() {
     let taskfile_path = match discovery::find_taskfile() {
         Some(path) => path,
         None => {
-            eprintln!(
-                "{} No Taskfile found in current or parent directories.",
-                "error:".red().bold()
-            );
-            process::exit(1);
+            // If running with a specific task name, don't offer to scaffold
+            if cli.task_name.is_some() || cli.list {
+                eprintln!(
+                    "{} No Taskfile found in current or parent directories.",
+                    "error:".red().bold()
+                );
+                process::exit(1);
+            }
+            // Interactive: offer to create a Taskfile
+            match scaffold::prompt_and_create() {
+                Some(path) => path,
+                None => process::exit(0),
+            }
         }
     };
 
