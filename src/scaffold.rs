@@ -86,6 +86,41 @@ task clean {
 # Task body is plain bash — use any shell commands you like.
 "##;
 
+/// Create a Taskfile directly (for --init). Returns true on success.
+pub fn create() -> bool {
+    let cwd = match env::current_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!(
+                "{} Could not determine current directory: {}",
+                "error:".red().bold(),
+                e
+            );
+            return false;
+        }
+    };
+    let target = cwd.join("Taskfile");
+
+    if target.exists() {
+        eprintln!(
+            "{} Taskfile already exists in {}",
+            "warning:".yellow().bold(),
+            cwd.display()
+        );
+        return false;
+    }
+
+    if let Err(e) = fs::write(&target, TEMPLATE) {
+        eprintln!("{} Could not create Taskfile: {}", "error:".red().bold(), e);
+        return false;
+    }
+
+    eprintln!("{} Created {}", "✓".green().bold(), target.display());
+    eprintln!("  Run {} to see available tasks.", "task".cyan());
+    true
+}
+
+/// Prompt the user to create a Taskfile (interactive, when no Taskfile found).
 pub fn prompt_and_create() -> Option<PathBuf> {
     let cwd = env::current_dir().ok()?;
     let target = cwd.join("Taskfile");

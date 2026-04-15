@@ -148,6 +148,7 @@ Usage:
 
 Options:
   --list, -l       List all available tasks
+  --init           Create a new Taskfile
   --help, -h       Show help
   --version, -v    Show version
 
@@ -166,14 +167,29 @@ Available tasks:
 ```
 task <name> [-- args...]      Run a task
 task --list, -l               List all available tasks
+task --init                   Create a new Taskfile in the current directory
 task --update                 Update to the latest version
 task --update=v0.1.0          Update to a specific version
 task --help, -h               Show help
 task --version, -v            Show version
-task                          Show help + task list
+task                          Show help + task list (or offer to create a Taskfile)
 ```
 
 Task automatically checks for updates once per day and notifies you when a new version is available.
+
+## Getting started in a new project
+
+Run `task --init` (or just `task`) in your project directory:
+
+```sh
+cd my-project
+task --init
+# ✓ Created /path/to/my-project/Taskfile
+```
+
+This creates a Taskfile with documented examples covering exports, aliases, parameters, dependencies, and includes — everything you need to get started.
+
+If you simply run `task` without a Taskfile, it will interactively ask if you'd like to create one.
 
 ## Taskfile discovery
 

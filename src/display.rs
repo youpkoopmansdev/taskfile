@@ -63,6 +63,11 @@ pub fn print_help_with_tasks(registry: &HashMap<String, ResolvedTask>) {
         "--list, -l".green(),
         "List all available tasks".dimmed()
     );
+    println!(
+        "  {}         {}",
+        "--init".green(),
+        "Create a new Taskfile".dimmed()
+    );
     println!("  {}       {}", "--help, -h".green(), "Show help".dimmed());
     println!(
         "  {}    {}",

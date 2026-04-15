@@ -29,6 +29,15 @@ fn main() {
         return;
     }
 
+    // Handle --init (no Taskfile needed)
+    if cli.init {
+        if scaffold::create() {
+            process::exit(0);
+        } else {
+            process::exit(1);
+        }
+    }
+
     // Background update check (non-blocking, once per day)
     updater::check_for_update_background();
 

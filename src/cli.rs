@@ -14,6 +14,10 @@ pub struct Cli {
     #[arg(short, long)]
     pub list: bool,
 
+    /// Create a new Taskfile in the current directory
+    #[arg(long)]
+    pub init: bool,
+
     /// Update to the latest version (or a specific version with --update=v0.2.0)
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     pub update: Option<String>,
