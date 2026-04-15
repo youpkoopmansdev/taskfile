@@ -172,9 +172,17 @@ fn fetch_latest_version() -> Option<String> {
 }
 
 fn version_newer(latest: &str, current: &str) -> bool {
-    let parse = |v: &str| -> Vec<u32> { v.split('.').filter_map(|s| s.parse().ok()).collect() };
+    let parse = |v: &str| -> Vec<u32> {
+        // Strip pre-release suffix (e.g., "1.0.0-beta" → "1.0.0")
+        let v = v.split('-').next().unwrap_or(v);
+        v.split('.').filter_map(|s| s.parse().ok()).collect()
+    };
     let l = parse(latest);
     let c = parse(current);
+    // Only consider newer if it's a clean release (no pre-release in latest)
+    if latest.contains('-') {
+        return false;
+    }
     l > c
 }
 

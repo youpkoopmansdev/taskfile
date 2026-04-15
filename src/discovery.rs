@@ -2,20 +2,9 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 pub fn find_taskfile() -> Option<PathBuf> {
-    let mut dir = env::current_dir().ok()?;
-
-    loop {
-        let candidate = dir.join("Taskfile");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-        if !dir.pop() {
-            return None;
-        }
-    }
+    find_taskfile_from(&env::current_dir().ok()?)
 }
 
-#[allow(dead_code)]
 pub fn find_taskfile_from(start: &Path) -> Option<PathBuf> {
     let mut dir = start.to_path_buf();
 

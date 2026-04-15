@@ -15,7 +15,6 @@ pub struct Task {
     pub params: Vec<Param>,
     pub dependencies: Vec<String>,
     pub body: String,
-    #[allow(dead_code)]
     pub line: usize,
 }
 

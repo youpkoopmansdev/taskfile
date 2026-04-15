@@ -35,12 +35,33 @@ pub fn parse(input: &str, filepath: &Path) -> Result<Ast, ParseError> {
             );
             i += 1;
         } else if line.starts_with("export ") {
+            if pending_description.is_some() {
+                return Err(ParseError::syntax(
+                    filepath,
+                    line_num,
+                    "@description must be followed by a task definition",
+                ));
+            }
             exports.push(parse_export(line, filepath, line_num)?);
             i += 1;
         } else if line.starts_with("alias ") {
+            if pending_description.is_some() {
+                return Err(ParseError::syntax(
+                    filepath,
+                    line_num,
+                    "@description must be followed by a task definition",
+                ));
+            }
             aliases.push(parse_alias(line, filepath, line_num)?);
             i += 1;
         } else if line.starts_with("include ") {
+            if pending_description.is_some() {
+                return Err(ParseError::syntax(
+                    filepath,
+                    line_num,
+                    "@description must be followed by a task definition",
+                ));
+            }
             includes.push(parse_include(line, filepath, line_num)?);
             i += 1;
         } else if line.starts_with("task ") {
@@ -204,30 +225,23 @@ fn parse_task(lines: &[&str], start: usize, filepath: &Path) -> Result<(Task, us
         ));
     }
 
-    // Collect body lines until braces balance
-    let mut brace_depth = 1;
+    // Collect body lines until braces balance (string/comment-aware)
+    let mut brace_depth: i32 = 1;
     let mut body_lines = Vec::new();
 
     while i < lines.len() {
         let l = lines[i];
-        for ch in l.chars() {
-            if ch == '{' {
-                brace_depth += 1;
-            } else if ch == '}' {
-                brace_depth -= 1;
-            }
-        }
+        count_braces(l, &mut brace_depth);
 
         if brace_depth == 0 {
             // Don't include the closing brace line unless there's content before '}'
             let trimmed = l.trim();
-            if trimmed != "}" {
-                // There might be content before the closing brace
-                if let Some(pos) = l.rfind('}') {
-                    let before = &l[..pos];
-                    if !before.trim().is_empty() {
-                        body_lines.push(before);
-                    }
+            if trimmed != "}"
+                && let Some(pos) = l.rfind('}')
+            {
+                let before = &l[..pos];
+                if !before.trim().is_empty() {
+                    body_lines.push(before);
                 }
             }
             i += 1;
@@ -279,17 +293,76 @@ fn parse_params<'a>(
     let inner = &input[1..end];
     let mut params = Vec::new();
 
-    for token in inner.split_whitespace() {
-        if let Some(eq_pos) = token.find('=') {
-            let name = token[..eq_pos].to_string();
-            let default = unquote(&token[eq_pos + 1..]);
+    // Parse params handling quoted defaults with spaces
+    let mut chars = inner.chars().peekable();
+    while chars.peek().is_some() {
+        // Skip whitespace between params
+        while chars.peek().is_some_and(|c| c.is_whitespace()) {
+            chars.next();
+        }
+        if chars.peek().is_none() {
+            break;
+        }
+
+        // Read param name (until '=' or whitespace or end)
+        let mut name = String::new();
+        while chars
+            .peek()
+            .is_some_and(|c| *c != '=' && !c.is_whitespace())
+        {
+            name.push(chars.next().unwrap());
+        }
+
+        if name.is_empty() {
+            break;
+        }
+
+        if !is_valid_identifier(&name) {
+            return Err(ParseError::syntax(
+                filepath,
+                line_num,
+                format!(
+                    "invalid parameter name '{}' — must be a valid identifier (letters, digits, underscores)",
+                    name
+                ),
+            ));
+        }
+
+        if chars.peek() == Some(&'=') {
+            chars.next(); // consume '='
+            let default = if chars.peek() == Some(&'"') {
+                // Quoted default — read until closing quote
+                chars.next(); // consume opening "
+                let mut val = String::new();
+                let mut escaped = false;
+                for ch in chars.by_ref() {
+                    if escaped {
+                        val.push(ch);
+                        escaped = false;
+                    } else if ch == '\\' {
+                        escaped = true;
+                    } else if ch == '"' {
+                        break;
+                    } else {
+                        val.push(ch);
+                    }
+                }
+                val
+            } else {
+                // Unquoted default — read until whitespace
+                let mut val = String::new();
+                while chars.peek().is_some_and(|c| !c.is_whitespace()) {
+                    val.push(chars.next().unwrap());
+                }
+                val
+            };
             params.push(Param {
                 name,
                 default: Some(default),
             });
         } else {
             params.push(Param {
-                name: token.to_string(),
+                name,
                 default: None,
             });
         }
@@ -324,11 +397,53 @@ fn parse_depends<'a>(
 
 fn unquote(s: &str) -> String {
     let s = s.trim();
-    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
+    if s.len() >= 2
+        && ((s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')))
+    {
         s[1..s.len() - 1].to_string()
     } else {
         s.to_string()
     }
+}
+
+/// Count braces in a line, skipping braces inside single-quoted strings,
+/// double-quoted strings, and comments.
+fn count_braces(line: &str, depth: &mut i32) {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut prev = '\0';
+
+    for ch in line.chars() {
+        // Comments outside of strings end brace counting for the rest of the line
+        if !in_single && !in_double && ch == '#' {
+            break;
+        }
+
+        if ch == '\'' && !in_double && prev != '\\' {
+            in_single = !in_single;
+        } else if ch == '"' && !in_single && prev != '\\' {
+            in_double = !in_double;
+        } else if !in_single && !in_double {
+            if ch == '{' {
+                *depth += 1;
+            } else if ch == '}' {
+                *depth -= 1;
+            }
+        }
+
+        prev = ch;
+    }
+}
+
+fn is_valid_identifier(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    let first = name.chars().next().unwrap();
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return false;
+    }
+    name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 fn dedent_body(lines: &[&str]) -> String {
@@ -554,5 +669,83 @@ task build depends=[clean] [target="release"] {
         );
         assert_eq!(ast.tasks[1].dependencies, vec!["clean"]);
         assert_eq!(ast.tasks[1].params[0].default.as_deref(), Some("release"));
+    }
+
+    #[test]
+    fn parse_braces_inside_strings() {
+        let input = r#"task test {
+  echo "use { and } in output"
+  echo 'more {braces}'
+  # comment with { brace
+  echo "done"
+}"#;
+        let ast = parse(input, &test_path()).unwrap();
+        assert_eq!(ast.tasks.len(), 1);
+        assert!(ast.tasks[0].body.contains("use { and }"));
+        assert!(ast.tasks[0].body.contains("done"));
+    }
+
+    #[test]
+    fn parse_empty_task_body() {
+        let input = "task noop {\n}\n";
+        let ast = parse(input, &test_path()).unwrap();
+        assert_eq!(ast.tasks.len(), 1);
+        assert_eq!(ast.tasks[0].name, "noop");
+        assert!(ast.tasks[0].body.trim().is_empty());
+    }
+
+    #[test]
+    fn description_before_non_task_is_error() {
+        let input = "@description Some desc\nexport X=\"y\"\n";
+        let result = parse(input, &test_path());
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("@description must be followed by a task"));
+    }
+
+    #[test]
+    fn param_default_with_spaces() {
+        let input = r#"task greet [msg="hello world" name="foo bar"] {
+  echo "$msg $name"
+}"#;
+        let ast = parse(input, &test_path()).unwrap();
+        assert_eq!(ast.tasks[0].params.len(), 2);
+        assert_eq!(
+            ast.tasks[0].params[0].default.as_deref(),
+            Some("hello world")
+        );
+        assert_eq!(ast.tasks[0].params[1].default.as_deref(), Some("foo bar"));
+    }
+
+    #[test]
+    fn invalid_param_name_is_error() {
+        let input = "task test [$invalid] {\n  echo hi\n}\n";
+        let result = parse(input, &test_path());
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid parameter name"));
+    }
+
+    #[test]
+    fn unquote_single_char() {
+        // Ensure single-char strings don't panic
+        assert_eq!(unquote("\""), "\"");
+        assert_eq!(unquote("'"), "'");
+        assert_eq!(unquote(""), "");
+    }
+
+    #[test]
+    fn count_braces_string_aware() {
+        let mut depth: i32 = 0;
+        count_braces(r#"echo "{ hello }""#, &mut depth);
+        assert_eq!(depth, 0);
+
+        depth = 0;
+        count_braces("real_brace {", &mut depth);
+        assert_eq!(depth, 1);
+
+        depth = 0;
+        count_braces("} # closing { brace in comment", &mut depth);
+        assert_eq!(depth, -1);
     }
 }

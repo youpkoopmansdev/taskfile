@@ -336,3 +336,49 @@ include "tasks/deploy.Taskfile""#,
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Deploying myapp"));
 }
+
+#[test]
+fn cli_dependency_cycle_detected() {
+    let tmp = tempfile::tempdir().unwrap();
+    setup_taskfile(
+        tmp.path(),
+        r#"task a depends=[b] {
+  echo "a"
+}
+
+task b depends=[a] {
+  echo "b"
+}"#,
+    );
+
+    let output = Command::new(task_bin())
+        .arg("a")
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("circular dependency"));
+}
+
+#[test]
+fn cli_braces_in_strings_work() {
+    let tmp = tempfile::tempdir().unwrap();
+    setup_taskfile(
+        tmp.path(),
+        r#"task test {
+  echo "braces { and } inside strings"
+}"#,
+    );
+
+    let output = Command::new(task_bin())
+        .arg("test")
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("braces { and } inside strings"));
+}

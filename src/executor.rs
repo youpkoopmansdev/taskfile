@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::process::ExitStatus;
 
 use colored::Colorize;
@@ -9,11 +10,20 @@ use crate::script;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecError {
-    #[error("task '{name}' failed with exit code {code}")]
-    TaskFailed { name: String, code: i32 },
+    #[error("task '{name}' (at {file}:{line}) failed with exit code {code}")]
+    TaskFailed {
+        name: String,
+        code: i32,
+        file: PathBuf,
+        line: usize,
+    },
 
-    #[error("task '{name}' was terminated by signal")]
-    TaskSignaled { name: String },
+    #[error("task '{name}' (at {file}:{line}) was terminated by signal")]
+    TaskSignaled {
+        name: String,
+        file: PathBuf,
+        line: usize,
+    },
 
     #[error("failed to execute bash: {0}")]
     BashError(#[from] std::io::Error),
@@ -26,6 +36,9 @@ pub enum ExecError {
 
     #[error("dependency '{dep}' not found for task '{task}'")]
     DependencyNotFound { task: String, dep: String },
+
+    #[error("circular dependency detected: {}", .chain.join(" → "))]
+    CircularDependency { chain: Vec<String> },
 }
 
 pub fn execute_task(
@@ -34,6 +47,29 @@ pub fn execute_task(
     registry: &HashMap<String, ResolvedTask>,
     runner: &dyn TaskRunner,
 ) -> Result<ExitStatus, ExecError> {
+    let mut visited = HashSet::new();
+    let mut chain = Vec::new();
+    execute_task_inner(name, task_args, registry, runner, &mut visited, &mut chain)
+}
+
+fn execute_task_inner(
+    name: &str,
+    task_args: &[String],
+    registry: &HashMap<String, ResolvedTask>,
+    runner: &dyn TaskRunner,
+    visited: &mut HashSet<String>,
+    chain: &mut Vec<String>,
+) -> Result<ExitStatus, ExecError> {
+    if visited.contains(name) {
+        chain.push(name.to_string());
+        return Err(ExecError::CircularDependency {
+            chain: chain.clone(),
+        });
+    }
+
+    visited.insert(name.to_string());
+    chain.push(name.to_string());
+
     let resolved = registry.get(name).ok_or_else(|| ExecError::UnknownTask {
         name: name.to_string(),
     })?;
@@ -43,26 +79,24 @@ pub fn execute_task(
     // Run dependencies first
     for dep in &resolved.task.dependencies {
         let dep_name = resolve_dep_name(name, dep);
-        let dep_resolved =
-            registry
-                .get(&dep_name)
-                .ok_or_else(|| ExecError::DependencyNotFound {
-                    task: name.to_string(),
-                    dep: dep_name.clone(),
-                })?;
-
-        eprintln!("{} {}", "→ dep:".dimmed(), dep_name.dimmed());
-        let status = run_single_task(&dep_name, dep_resolved, &HashMap::new(), runner)?;
-        if !status.success() {
-            return Err(ExecError::TaskFailed {
-                name: dep_name,
-                code: status.code().unwrap_or(1),
+        if !registry.contains_key(&dep_name) {
+            return Err(ExecError::DependencyNotFound {
+                task: name.to_string(),
+                dep: dep_name,
             });
         }
+
+        eprintln!("{} {}", "→ dep:".dimmed(), dep_name.dimmed());
+        execute_task_inner(&dep_name, &[], registry, runner, visited, chain)?;
     }
 
     let param_values = build_param_values(name, &resolved.task.params, &arg_map)?;
-    run_single_task(name, resolved, &param_values, runner)
+    let status = run_single_task(name, resolved, &param_values, runner)?;
+
+    chain.pop();
+    visited.remove(name);
+
+    Ok(status)
 }
 
 fn run_single_task(
@@ -80,11 +114,15 @@ fn run_single_task(
         if code == -1 {
             return Err(ExecError::TaskSignaled {
                 name: name.to_string(),
+                file: resolved.source_file.clone(),
+                line: resolved.task.line,
             });
         }
         return Err(ExecError::TaskFailed {
             name: name.to_string(),
             code,
+            file: resolved.source_file.clone(),
+            line: resolved.task.line,
         });
     }
 
@@ -100,6 +138,12 @@ fn parse_task_args(args: &[String]) -> HashMap<String, String> {
             } else {
                 map.insert(kv.to_string(), String::new());
             }
+        } else {
+            eprintln!(
+                "{} ignoring positional argument '{}' — use --key=value format",
+                "warning:".yellow().bold(),
+                arg
+            );
         }
     }
     map
