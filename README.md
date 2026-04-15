@@ -5,7 +5,7 @@ A modern task runner that reads `Taskfile` files. Think of it as Make's task run
 ## Install
 
 ```sh
-curl -fsSL https://taskfile.koopmans.dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/youpkoopmansdev/taskfile/main/install/install.sh | sh
 ```
 
 Or with Cargo:

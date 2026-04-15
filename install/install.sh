@@ -2,7 +2,7 @@
 set -eu
 
 # Task — install script
-# Usage: curl -fsSL https://taskfile.koopmans.dev/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/youpkoopmansdev/taskfile/main/install/install.sh | sh
 
 REPO="youpkoopmansdev/taskfile"
 BIN_NAME="task"
