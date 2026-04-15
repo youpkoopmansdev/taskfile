@@ -1,8 +1,11 @@
+dotenv ".env.deploy"
+
 @description Deploy to staging
 task staging {
   echo "Deploying $PROJECT to staging in $REGION..."
 }
 
+@confirm Deploy to production?
 @description Deploy to production
 task prod [version] {
   echo "Deploying $PROJECT version $version to production in $REGION..."

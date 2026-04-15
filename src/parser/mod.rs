@@ -3,7 +3,7 @@ pub mod error;
 
 use std::path::Path;
 
-use ast::{Alias, Ast, Export, Include, Param, Task};
+use ast::{Alias, Ast, DotEnv, Export, Include, Param, Task};
 use error::ParseError;
 
 pub fn parse(input: &str, filepath: &Path) -> Result<Ast, ParseError> {
@@ -11,10 +11,12 @@ pub fn parse(input: &str, filepath: &Path) -> Result<Ast, ParseError> {
     let mut aliases = Vec::new();
     let mut exports = Vec::new();
     let mut includes = Vec::new();
+    let mut dotenv = Vec::new();
 
     let lines: Vec<&str> = input.lines().collect();
     let mut i = 0;
     let mut pending_description: Option<String> = None;
+    let mut pending_confirm: Option<String> = None;
 
     while i < lines.len() {
         let line_num = i + 1;
@@ -26,6 +28,9 @@ pub fn parse(input: &str, filepath: &Path) -> Result<Ast, ParseError> {
             continue;
         }
 
+        // Check for annotations that must precede a task
+        let has_pending_annotation = pending_description.is_some() || pending_confirm.is_some();
+
         if line.starts_with("@description ") {
             pending_description = Some(
                 line.strip_prefix("@description ")
@@ -34,40 +39,61 @@ pub fn parse(input: &str, filepath: &Path) -> Result<Ast, ParseError> {
                     .to_string(),
             );
             i += 1;
+        } else if line.starts_with("@confirm") {
+            let msg = line.strip_prefix("@confirm").unwrap().trim().to_string();
+            pending_confirm = Some(if msg.is_empty() {
+                "Are you sure?".to_string()
+            } else {
+                msg
+            });
+            i += 1;
         } else if line.starts_with("export ") {
-            if pending_description.is_some() {
+            if has_pending_annotation {
                 return Err(ParseError::syntax(
                     filepath,
                     line_num,
-                    "@description must be followed by a task definition",
+                    "@description/@confirm must be followed by a task definition",
                 ));
             }
             exports.push(parse_export(line, filepath, line_num)?);
             i += 1;
         } else if line.starts_with("alias ") {
-            if pending_description.is_some() {
+            if has_pending_annotation {
                 return Err(ParseError::syntax(
                     filepath,
                     line_num,
-                    "@description must be followed by a task definition",
+                    "@description/@confirm must be followed by a task definition",
                 ));
             }
             aliases.push(parse_alias(line, filepath, line_num)?);
             i += 1;
         } else if line.starts_with("include ") {
-            if pending_description.is_some() {
+            if has_pending_annotation {
                 return Err(ParseError::syntax(
                     filepath,
                     line_num,
-                    "@description must be followed by a task definition",
+                    "@description/@confirm must be followed by a task definition",
                 ));
             }
             includes.push(parse_include(line, filepath, line_num)?);
+            i += 1;
+        } else if line.starts_with("dotenv ") {
+            if has_pending_annotation {
+                return Err(ParseError::syntax(
+                    filepath,
+                    line_num,
+                    "@description/@confirm must be followed by a task definition",
+                ));
+            }
+            dotenv.push(parse_dotenv(line, filepath, line_num)?);
             i += 1;
         } else if line.starts_with("task ") {
             let (mut task, next_i) = parse_task(&lines, i, filepath)?;
             if let Some(desc) = pending_description.take() {
                 task.description = Some(desc);
+            }
+            if let Some(msg) = pending_confirm.take() {
+                task.confirm = Some(msg);
             }
             tasks.push(task);
             i = next_i;
@@ -85,6 +111,7 @@ pub fn parse(input: &str, filepath: &Path) -> Result<Ast, ParseError> {
         aliases,
         exports,
         includes,
+        dotenv,
     })
 }
 
@@ -147,11 +174,12 @@ fn parse_task(lines: &[&str], start: usize, filepath: &Path) -> Result<(Task, us
     let line = lines[start].trim();
     let rest = line.strip_prefix("task ").unwrap();
 
-    // Parse the task header: name, optional description, optional [params], optional depends=[...], then {
+    // Parse the task header: name, optional [params], optional depends=[...], optional depends_parallel=[...], then {
     let mut cursor = rest;
     let description = None;
     let mut params = Vec::new();
     let mut dependencies = Vec::new();
+    let mut parallel_dependencies = Vec::new();
     let mut found_open_brace = false;
 
     // Parse task name (alphanumeric, hyphens, underscores)
@@ -180,8 +208,13 @@ fn parse_task(lines: &[&str], start: usize, filepath: &Path) -> Result<(Task, us
             let (p, rest) = parse_params(cursor, filepath, line_num)?;
             params = p;
             cursor = rest.trim_start();
+        } else if cursor.starts_with("depends_parallel=[") {
+            let (deps, rest) =
+                parse_depends_prefixed(cursor, "depends_parallel=[", filepath, line_num)?;
+            parallel_dependencies = deps;
+            cursor = rest.trim_start();
         } else if cursor.starts_with("depends=[") {
-            let (deps, rest) = parse_depends(cursor, filepath, line_num)?;
+            let (deps, rest) = parse_depends_prefixed(cursor, "depends=[", filepath, line_num)?;
             dependencies = deps;
             cursor = rest.trim_start();
         } else {
@@ -267,8 +300,10 @@ fn parse_task(lines: &[&str], start: usize, filepath: &Path) -> Result<(Task, us
         Task {
             name,
             description,
+            confirm: None,
             params,
             dependencies,
+            parallel_dependencies,
             body,
             line: line_num,
         },
@@ -371,12 +406,13 @@ fn parse_params<'a>(
     Ok((params, &input[end + 1..]))
 }
 
-fn parse_depends<'a>(
+fn parse_depends_prefixed<'a>(
     input: &'a str,
+    prefix: &str,
     filepath: &Path,
     line_num: usize,
 ) -> Result<(Vec<String>, &'a str), ParseError> {
-    let rest = input.strip_prefix("depends=[").unwrap();
+    let rest = input.strip_prefix(prefix).unwrap();
     let Some(end) = rest.find(']') else {
         return Err(ParseError::syntax(
             filepath,
@@ -393,6 +429,20 @@ fn parse_depends<'a>(
         .collect();
 
     Ok((deps, &rest[end + 1..]))
+}
+
+fn parse_dotenv(line: &str, filepath: &Path, line_num: usize) -> Result<DotEnv, ParseError> {
+    let rest = line.strip_prefix("dotenv ").unwrap().trim();
+    let path = unquote(rest);
+
+    if path.is_empty() {
+        return Err(ParseError::syntax(filepath, line_num, "empty dotenv path"));
+    }
+
+    Ok(DotEnv {
+        path,
+        line: line_num,
+    })
 }
 
 fn unquote(s: &str) -> String {
@@ -700,7 +750,7 @@ task build depends=[clean] [target="release"] {
         let result = parse(input, &test_path());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("@description must be followed by a task"));
+        assert!(err.contains("@description/@confirm must be followed by a task"));
     }
 
     #[test]

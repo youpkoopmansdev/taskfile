@@ -10,13 +10,37 @@ mod script;
 mod suggest;
 mod updater;
 
+use std::path::PathBuf;
 use std::process;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::{Shell, generate};
 use colored::Colorize;
 
 fn main() {
     let cli = cli::Cli::parse();
+
+    // Handle --completions before anything else
+    if let Some(shell) = &cli.completions {
+        let shell = match shell.to_lowercase().as_str() {
+            "bash" => Shell::Bash,
+            "zsh" => Shell::Zsh,
+            "fish" => Shell::Fish,
+            "powershell" => Shell::PowerShell,
+            "elvish" => Shell::Elvish,
+            _ => {
+                eprintln!(
+                    "{} unknown shell '{}' — use bash, zsh, fish, powershell, or elvish",
+                    "error:".red().bold(),
+                    shell
+                );
+                process::exit(1);
+            }
+        };
+        let mut cmd = cli::Cli::command();
+        generate(shell, &mut cmd, "task", &mut std::io::stdout());
+        return;
+    }
 
     // Handle --update before anything else (no Taskfile needed)
     if let Some(version) = &cli.update {
@@ -41,21 +65,29 @@ fn main() {
     // Background update check (non-blocking, once per day)
     updater::check_for_update_background();
 
-    let taskfile_path = match discovery::find_taskfile() {
-        Some(path) => path,
-        None => {
-            // If running with a specific task name, don't offer to scaffold
-            if cli.task_name.is_some() || cli.list {
-                eprintln!(
-                    "{} No Taskfile found in current or parent directories.",
-                    "error:".red().bold()
-                );
-                process::exit(1);
-            }
-            // Interactive: offer to create a Taskfile
-            match scaffold::prompt_and_create() {
-                Some(path) => path,
-                None => process::exit(0),
+    // Find Taskfile: --file flag overrides discovery
+    let taskfile_path = if let Some(ref path) = cli.file {
+        let p = PathBuf::from(path);
+        if !p.is_file() {
+            eprintln!("{} Taskfile not found: {}", "error:".red().bold(), path);
+            process::exit(1);
+        }
+        p
+    } else {
+        match discovery::find_taskfile() {
+            Some(path) => path,
+            None => {
+                if cli.task_name.is_some() || cli.list || cli.dry_run {
+                    eprintln!(
+                        "{} No Taskfile found in current or parent directories.",
+                        "error:".red().bold()
+                    );
+                    process::exit(1);
+                }
+                match scaffold::prompt_and_create() {
+                    Some(path) => path,
+                    None => process::exit(0),
+                }
             }
         }
     };
@@ -87,12 +119,13 @@ fn main() {
     }
 
     let runner = runner::BashRunner;
-    match executor::execute_task(task_name, &cli.task_args, &registry, &runner) {
+    match executor::execute_task(task_name, &cli.task_args, &registry, &runner, cli.dry_run) {
         Ok(_) => {}
         Err(e) => {
             eprintln!("{} {}", "error:".red().bold(), e);
             match e {
                 executor::ExecError::TaskFailed { code, .. } => process::exit(code),
+                executor::ExecError::Cancelled { .. } => process::exit(0),
                 _ => process::exit(1),
             }
         }

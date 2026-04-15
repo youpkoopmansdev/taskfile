@@ -3,6 +3,8 @@
 include "tasks/docker.Taskfile"
 include "tasks/deploy.Taskfile"
 
+dotenv ".env"
+
 export PROJECT="myapp"
 export REGION="us-east-1"
 
@@ -20,7 +22,29 @@ task clean {
   rm -rf target/ dist/
 }
 
-@description Build the project
+@description Build the project (runs clean first)
 task build depends=[clean] {
   echo "Building $PROJECT..."
+}
+
+@description Run lint and test in parallel, then build
+task ci depends_parallel=[lint, test] depends=[build] {
+  echo "CI pipeline complete"
+}
+
+@description Run linter
+task lint {
+  echo "Linting $PROJECT..."
+}
+
+@description Run test suite
+task test {
+  echo "Testing $PROJECT..."
+}
+
+@confirm Are you sure you want to reset everything?
+@description Reset the project to a clean state
+task reset {
+  rm -rf target/ dist/ node_modules/
+  echo "Project reset."
 }

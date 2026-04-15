@@ -1,6 +1,6 @@
 use std::process::{Command, ExitStatus};
 
-pub trait TaskRunner {
+pub trait TaskRunner: Send + Sync {
     fn run_script(&self, script: &str) -> Result<ExitStatus, std::io::Error>;
 }
 

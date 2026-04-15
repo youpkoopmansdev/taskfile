@@ -11,6 +11,7 @@ const TEMPLATE: &str = r##"# ─────────────────
 #
 # Run tasks:   task <name>
 # List tasks:  task --list  (or just: task)
+# Dry run:     task <name> --dry-run
 # Update CLI:  task --update
 #
 # Full docs:   https://github.com/youpkoopmansdev/taskfile
@@ -26,6 +27,13 @@ const TEMPLATE: &str = r##"# ─────────────────
 #   docker.Taskfile includes compose.Taskfile → docker:compose:*
 #
 # Exports and aliases in included files are scoped to that namespace.
+
+# ─── Dotenv ────────────────────────────────────────
+# Load environment variables from a .env file.
+# The file is sourced at the start of every task in this scope.
+#
+# dotenv ".env"
+# dotenv ".env.local"
 
 # ─── Exports ───────────────────────────────────────
 # Environment variables available in all tasks defined in this file.
@@ -43,6 +51,8 @@ export PROJECT="myproject"
 # Add a description with @description above the task.
 # Add parameters with [name] or [name="default"].
 # Add dependencies with depends=[task1, task2].
+# Add parallel dependencies with depends_parallel=[task1, task2].
+# Add a confirmation prompt with @confirm above the task.
 
 @description Say hello
 task hello {
@@ -66,6 +76,13 @@ task clean {
   # rm -rf target/ dist/ build/
 }
 
+@confirm Are you sure you want to nuke everything?
+@description Remove all build artifacts and caches
+task nuke {
+  echo "Nuking..."
+  # rm -rf target/ dist/ node_modules/ .cache/
+}
+
 # ─── Tips ──────────────────────────────────────────
 #
 # Parameters:
@@ -77,11 +94,32 @@ task clean {
 #   task build depends=[clean, lint] { ... }
 #   Dependencies run in order before the task body.
 #
+# Parallel dependencies:
+#   task ci depends_parallel=[lint, test] { ... }
+#   These run concurrently — use for independent tasks.
+#
+# Confirmation prompts:
+#   @confirm Are you sure?
+#   task dangerous { ... }
+#   Asks for confirmation before running. Skipped with --dry-run.
+#
+# Dotenv:
+#   dotenv ".env"
+#   Loads environment variables from a file before each task.
+#
 # Organizing with includes:
 #   1. Create a tasks/ directory
 #   2. Add focused Taskfiles: tasks/docker.Taskfile, tasks/test.Taskfile
 #   3. Include them here: include "tasks/docker.Taskfile"
 #   4. Run namespaced: task docker:up
+#
+# Dry run:
+#   task build --dry-run            # shows the script without running it
+#
+# Shell completions:
+#   task --completions bash >> ~/.bashrc
+#   task --completions zsh >> ~/.zshrc
+#   task --completions fish > ~/.config/fish/completions/task.fish
 #
 # Task body is plain bash — use any shell commands you like.
 "##;

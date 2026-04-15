@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use crate::parser::ast::{Alias, Export};
+use crate::parser::ast::{Alias, DotEnv, Export};
 use crate::resolver::ResolvedTask;
 
 pub fn build_script(resolved: &ResolvedTask, param_values: &HashMap<String, String>) -> String {
     let sections: Vec<String> = vec![
         shell_options(),
+        dotenv_section(&resolved.dotenv),
         export_section(&resolved.exports),
         alias_section(&resolved.aliases),
         param_section(param_values),
@@ -21,6 +22,20 @@ pub fn build_script(resolved: &ResolvedTask, param_values: &HashMap<String, Stri
 
 fn shell_options() -> String {
     "set -euo pipefail".to_string()
+}
+
+fn dotenv_section(dotenv_files: &[DotEnv]) -> String {
+    dotenv_files
+        .iter()
+        .map(|d| {
+            format!(
+                "if [ -f {} ]; then set -a; source {}; set +a; fi",
+                shell_quote(&d.path),
+                shell_quote(&d.path)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn export_section(exports: &[Export]) -> String {
@@ -72,13 +87,16 @@ mod tests {
             task: Task {
                 name: "test".into(),
                 description: None,
+                confirm: None,
                 params: vec![],
                 dependencies: vec![],
+                parallel_dependencies: vec![],
                 body: body.into(),
                 line: 1,
             },
             aliases: vec![],
             exports: vec![],
+            dotenv: vec![],
             source_file: PathBuf::from("Taskfile"),
         }
     }

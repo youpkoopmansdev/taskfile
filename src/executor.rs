@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitStatus;
 
@@ -39,6 +40,9 @@ pub enum ExecError {
 
     #[error("circular dependency detected: {}", .chain.join(" → "))]
     CircularDependency { chain: Vec<String> },
+
+    #[error("task '{name}' cancelled by user")]
+    Cancelled { name: String },
 }
 
 pub fn execute_task(
@@ -46,17 +50,28 @@ pub fn execute_task(
     task_args: &[String],
     registry: &HashMap<String, ResolvedTask>,
     runner: &dyn TaskRunner,
+    dry_run: bool,
 ) -> Result<ExitStatus, ExecError> {
     let mut visited = HashSet::new();
     let mut chain = Vec::new();
-    execute_task_inner(name, task_args, registry, runner, &mut visited, &mut chain)
+    execute_task_inner(
+        name,
+        task_args,
+        registry,
+        runner,
+        dry_run,
+        &mut visited,
+        &mut chain,
+    )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_task_inner(
     name: &str,
     task_args: &[String],
     registry: &HashMap<String, ResolvedTask>,
     runner: &dyn TaskRunner,
+    dry_run: bool,
     visited: &mut HashSet<String>,
     chain: &mut Vec<String>,
 ) -> Result<ExitStatus, ExecError> {
@@ -76,7 +91,7 @@ fn execute_task_inner(
 
     let arg_map = parse_task_args(task_args);
 
-    // Run dependencies first
+    // Run sequential dependencies first
     for dep in &resolved.task.dependencies {
         let dep_name = resolve_dep_name(name, dep);
         if !registry.contains_key(&dep_name) {
@@ -87,16 +102,150 @@ fn execute_task_inner(
         }
 
         eprintln!("{} {}", "→ dep:".dimmed(), dep_name.dimmed());
-        execute_task_inner(&dep_name, &[], registry, runner, visited, chain)?;
+        execute_task_inner(&dep_name, &[], registry, runner, dry_run, visited, chain)?;
+    }
+
+    // Run parallel dependencies
+    if !resolved.task.parallel_dependencies.is_empty() {
+        run_parallel_deps(
+            name,
+            &resolved.task.parallel_dependencies,
+            registry,
+            runner,
+            dry_run,
+        )?;
+    }
+
+    // Handle @confirm
+    if let Some(msg) = &resolved.task.confirm
+        && !dry_run
+        && !prompt_confirm(msg)
+    {
+        return Err(ExecError::Cancelled {
+            name: name.to_string(),
+        });
     }
 
     let param_values = build_param_values(name, &resolved.task.params, &arg_map)?;
+
+    if dry_run {
+        let script_str = script::build_script(resolved, &param_values);
+        println!("{} {}", "# dry-run:".dimmed(), name.green().bold());
+        println!("{}", script_str);
+        // Return a fake success status
+        let status = runner.run_script("true").map_err(ExecError::BashError)?;
+        chain.pop();
+        visited.remove(name);
+        return Ok(status);
+    }
+
     let status = run_single_task(name, resolved, &param_values, runner)?;
 
     chain.pop();
     visited.remove(name);
 
     Ok(status)
+}
+
+fn run_parallel_deps(
+    parent_name: &str,
+    deps: &[String],
+    registry: &HashMap<String, ResolvedTask>,
+    runner: &dyn TaskRunner,
+    dry_run: bool,
+) -> Result<(), ExecError> {
+    // Validate all deps exist first
+    let dep_names: Vec<String> = deps
+        .iter()
+        .map(|dep| resolve_dep_name(parent_name, dep))
+        .collect();
+
+    for dep_name in &dep_names {
+        if !registry.contains_key(dep_name) {
+            return Err(ExecError::DependencyNotFound {
+                task: parent_name.to_string(),
+                dep: dep_name.clone(),
+            });
+        }
+    }
+
+    eprintln!(
+        "{} {}",
+        "→ parallel:".dimmed(),
+        dep_names.join(", ").dimmed()
+    );
+
+    // Build scripts for all parallel deps
+    let scripts: Vec<(String, String)> = dep_names
+        .iter()
+        .map(|dep_name| {
+            let resolved = &registry[dep_name];
+            let script_str = script::build_script(resolved, &HashMap::new());
+            (dep_name.clone(), script_str)
+        })
+        .collect();
+
+    if dry_run {
+        for (dep_name, script_str) in &scripts {
+            println!(
+                "{} {} {}",
+                "# dry-run parallel dep:".dimmed(),
+                dep_name.green().bold(),
+                "(would run in parallel)".dimmed()
+            );
+            println!("{}", script_str);
+        }
+        return Ok(());
+    }
+
+    // Spawn all in parallel threads
+    let results: Vec<Result<ExitStatus, ExecError>> = std::thread::scope(|s| {
+        let handles: Vec<_> = scripts
+            .iter()
+            .map(|(dep_name, script_str)| {
+                let name = dep_name.clone();
+                let script = script_str.clone();
+                s.spawn(move || {
+                    runner
+                        .run_script(&script)
+                        .map_err(ExecError::BashError)
+                        .and_then(|status| {
+                            if !status.success() {
+                                Err(ExecError::TaskFailed {
+                                    name: name.clone(),
+                                    code: status.code().unwrap_or(1),
+                                    file: PathBuf::from("parallel"),
+                                    line: 0,
+                                })
+                            } else {
+                                Ok(status)
+                            }
+                        })
+                })
+            })
+            .collect();
+
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+
+    // Check results
+    for result in results {
+        result?;
+    }
+
+    Ok(())
+}
+
+fn prompt_confirm(message: &str) -> bool {
+    eprint!("{} {} [y/N] ", "?".cyan().bold(), message);
+    io::stderr().flush().ok();
+
+    let mut answer = String::new();
+    if io::stdin().read_line(&mut answer).is_err() {
+        return false;
+    }
+    let answer = answer.trim().to_lowercase();
+    answer == "y" || answer == "yes"
 }
 
 fn run_single_task(

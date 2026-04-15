@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::parser;
-use crate::parser::ast::{Alias, Ast, Export, Task};
+use crate::parser::ast::{Alias, Ast, DotEnv, Export, Task};
 use crate::parser::error::ParseError;
 
 #[derive(Debug, Clone)]
@@ -11,6 +11,7 @@ pub struct ResolvedTask {
     pub task: Task,
     pub aliases: Vec<Alias>,
     pub exports: Vec<Export>,
+    pub dotenv: Vec<DotEnv>,
     pub source_file: PathBuf,
 }
 
@@ -47,7 +48,7 @@ pub fn resolve(taskfile_path: &Path) -> Result<HashMap<String, ResolvedTask>, Re
         include_chain: Vec::new(),
     };
 
-    resolve_file(taskfile_path, "", &[], &[], &mut ctx)?;
+    resolve_file(taskfile_path, "", &[], &[], &[], &mut ctx)?;
 
     Ok(ctx.registry)
 }
@@ -64,6 +65,7 @@ fn resolve_file(
     prefix: &str,
     parent_aliases: &[Alias],
     parent_exports: &[Export],
+    parent_dotenv: &[DotEnv],
     ctx: &mut ResolveContext,
 ) -> Result<(), ResolveError> {
     let canonical = filepath
@@ -91,11 +93,19 @@ fn resolve_file(
 
     let base_dir = filepath.parent().unwrap_or(Path::new("."));
 
-    // Build combined aliases/exports: parent chain + this file's own
+    // Build combined aliases/exports/dotenv: parent chain + this file's own
     let mut combined_aliases = parent_aliases.to_vec();
     combined_aliases.extend(ast.aliases.clone());
     let mut combined_exports = parent_exports.to_vec();
     combined_exports.extend(ast.exports.clone());
+    let mut combined_dotenv = parent_dotenv.to_vec();
+    combined_dotenv.extend(ast.dotenv.iter().map(|d| {
+        // Resolve dotenv paths relative to the file that contains the dotenv statement
+        DotEnv {
+            path: base_dir.join(&d.path).to_string_lossy().to_string(),
+            line: d.line,
+        }
+    }));
 
     // Register tasks from this file with combined scope
     register_tasks(
@@ -104,6 +114,7 @@ fn resolve_file(
         filepath,
         &combined_aliases,
         &combined_exports,
+        &combined_dotenv,
         &mut ctx.registry,
     )?;
 
@@ -134,6 +145,7 @@ fn resolve_file(
             &child_prefix,
             &combined_aliases,
             &combined_exports,
+            &combined_dotenv,
             ctx,
         )?;
     }
@@ -151,6 +163,7 @@ fn register_tasks(
     source_file: &Path,
     combined_aliases: &[Alias],
     combined_exports: &[Export],
+    combined_dotenv: &[DotEnv],
     registry: &mut HashMap<String, ResolvedTask>,
 ) -> Result<(), ResolveError> {
     for task in &ast.tasks {
@@ -175,6 +188,7 @@ fn register_tasks(
                 task: task.clone(),
                 aliases: combined_aliases.to_vec(),
                 exports: combined_exports.to_vec(),
+                dotenv: combined_dotenv.to_vec(),
                 source_file: source_file.to_path_buf(),
             },
         );

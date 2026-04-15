@@ -13,7 +13,24 @@ task down {
   dc down
 }
 
+@description Rebuild and restart containers in parallel
+task restart depends_parallel=[down, build] {
+  dc up -d
+}
+
+@description Build container images
+task build {
+  dc build
+}
+
 @description Tail container logs
 task logs [service="app"] {
   dc logs -f $service
+}
+
+@confirm This will remove all containers and volumes!
+@description Remove all containers, volumes, and images
+task nuke {
+  dc down -v --rmi all
+  echo "Everything removed."
 }

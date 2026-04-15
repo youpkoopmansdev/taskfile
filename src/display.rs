@@ -68,6 +68,21 @@ pub fn print_help_with_tasks(registry: &HashMap<String, ResolvedTask>) {
         "--init".green(),
         "Create a new Taskfile".dimmed()
     );
+    println!(
+        "  {}      {}",
+        "--dry-run".green(),
+        "Show the script without running it".dimmed()
+    );
+    println!(
+        "  {}   {}",
+        "--file, -f".green(),
+        "Use a specific Taskfile path".dimmed()
+    );
+    println!(
+        "  {}  {}",
+        "--completions".green(),
+        "Generate shell completions (bash, zsh, fish)".dimmed()
+    );
     println!("  {}       {}", "--help, -h".green(), "Show help".dimmed());
     println!(
         "  {}    {}",

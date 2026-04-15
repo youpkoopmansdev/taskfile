@@ -16,7 +16,7 @@ cargo install --git https://github.com/youpkoopmansdev/taskfile.git
 
 ## Quick start
 
-Create a `Taskfile` in your project root:
+Create a `Taskfile` in your project root (or run `task --init`):
 
 ```bash
 @description Start the development server
@@ -76,13 +76,25 @@ task deploy -- --env=production --target=v2
 
 ### Dependencies
 
+Run tasks in order before the task body:
+
 ```bash
 task build depends=[clean, compile] {
   echo "Done"
 }
 ```
 
-Dependencies run in order before the task body.
+### Parallel dependencies
+
+Run independent tasks concurrently before the task body:
+
+```bash
+task ci depends_parallel=[lint, test] depends=[build] {
+  echo "CI complete"
+}
+```
+
+`depends_parallel` tasks run at the same time. You can combine both — parallel deps run first, then sequential deps, then the body.
 
 ### Exports and aliases
 
@@ -92,6 +104,31 @@ alias dc="docker compose"
 ```
 
 Aliases are converted to shell functions automatically (so they work in non-interactive bash).
+
+### Dotenv
+
+Load environment variables from a `.env` file:
+
+```bash
+dotenv ".env"
+dotenv ".env.local"
+```
+
+The file is sourced (with `set -a` for auto-export) at the start of every task in that scope. Missing files are silently skipped.
+
+### Confirmation prompts
+
+Add `@confirm` above a task to require confirmation before running:
+
+```bash
+@confirm Are you sure you want to deploy?
+@description Deploy to production
+task deploy:prod [version] {
+  echo "Deploying $version..."
+}
+```
+
+The user sees a `[y/N]` prompt. Default is no. Skipped in `--dry-run` mode.
 
 ### Includes
 
@@ -104,25 +141,44 @@ include "tasks/deploy.Taskfile"
 
 The filename stem becomes the namespace. A file `tasks/docker.Taskfile` containing `task up {}` registers as `docker:up`.
 
-Exports and aliases from the parent file are inherited by included files.
+Exports, aliases, and dotenv from the parent file are inherited by included files.
 
 ## Project structure example
 
 ```
 myproject/
   Taskfile
+  .env
   tasks/
     docker.Taskfile
-    quality.Taskfile
+    deploy.Taskfile
 ```
 
 **Taskfile:**
 ```bash
 include "tasks/docker.Taskfile"
-include "tasks/quality.Taskfile"
+include "tasks/deploy.Taskfile"
+
+dotenv ".env"
 
 alias dc="docker compose -f docker/docker-compose.yml"
 export SERVICE="app"
+
+@description Build everything
+task build depends=[clean] {
+  echo "Building..."
+}
+
+@description Run lint and test in parallel, then build
+task ci depends_parallel=[lint, test] depends=[build] {
+  echo "CI pipeline complete"
+}
+
+@confirm Are you sure you want to reset?
+@description Reset the project
+task reset {
+  rm -rf target/ dist/
+}
 ```
 
 **tasks/docker.Taskfile:**
@@ -141,7 +197,7 @@ task down {
 Running `task` shows:
 
 ```
-Task 0.1.0
+Task 0.5.0
 
 Usage:
   task <name> [-- args...]
@@ -149,25 +205,31 @@ Usage:
 Options:
   --list, -l       List all available tasks
   --init           Create a new Taskfile
+  --dry-run        Show the script without running it
+  --file, -f       Use a specific Taskfile path
+  --completions    Generate shell completions (bash, zsh, fish)
   --help, -h       Show help
   --version, -v    Show version
 
 Available tasks:
+  build            Build everything
+  ci               Run lint and test in parallel, then build
+  reset            Reset the project
 
  docker:
-  docker:down    Stop containers
-  docker:up      Start containers
-
- quality:
-  quality:lint   Run all code quality checks
+  docker:down      Stop containers
+  docker:up        Start containers
 ```
 
 ## CLI
 
 ```
 task <name> [-- args...]      Run a task
+task <name> --dry-run         Show the bash script without running it
 task --list, -l               List all available tasks
 task --init                   Create a new Taskfile in the current directory
+task --file, -f <path>        Use a specific Taskfile instead of discovery
+task --completions <shell>    Generate shell completions (bash, zsh, fish, powershell, elvish)
 task --update                 Update to the latest version
 task --update=v0.1.0          Update to a specific version
 task --help, -h               Show help
@@ -176,6 +238,31 @@ task                          Show help + task list (or offer to create a Taskfi
 ```
 
 Task automatically checks for updates once per day and notifies you when a new version is available.
+
+### Dry run
+
+Preview the generated bash script without executing it:
+
+```sh
+task deploy:prod --dry-run -- --version=v2.0
+```
+
+This prints the full script (exports, aliases, dotenv, params, body) so you can inspect exactly what would run.
+
+### Shell completions
+
+Generate completions for your shell:
+
+```sh
+# Bash
+task --completions bash >> ~/.bashrc
+
+# Zsh
+task --completions zsh >> ~/.zshrc
+
+# Fish
+task --completions fish > ~/.config/fish/completions/task.fish
+```
 
 ## Getting started in a new project
 
@@ -187,13 +274,19 @@ task --init
 # ✓ Created /path/to/my-project/Taskfile
 ```
 
-This creates a Taskfile with documented examples covering exports, aliases, parameters, dependencies, and includes — everything you need to get started.
+This creates a Taskfile with documented examples covering exports, aliases, parameters, dependencies, parallel deps, dotenv, confirm prompts, and includes — everything you need to get started.
 
 If you simply run `task` without a Taskfile, it will interactively ask if you'd like to create one.
 
 ## Taskfile discovery
 
 `task` walks up from the current directory until it finds a `Taskfile`. This means you can run `task` from any subdirectory in your project.
+
+Use `--file` / `-f` to override discovery and point to a specific Taskfile:
+
+```sh
+task build -f ./other/Taskfile
+```
 
 ## License
 

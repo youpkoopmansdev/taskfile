@@ -6,14 +6,17 @@ pub struct Ast {
     pub aliases: Vec<Alias>,
     pub exports: Vec<Export>,
     pub includes: Vec<Include>,
+    pub dotenv: Vec<DotEnv>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Task {
     pub name: String,
     pub description: Option<String>,
+    pub confirm: Option<String>,
     pub params: Vec<Param>,
     pub dependencies: Vec<String>,
+    pub parallel_dependencies: Vec<String>,
     pub body: String,
     pub line: usize,
 }
@@ -38,6 +41,12 @@ pub struct Export {
 
 #[derive(Debug, Clone)]
 pub struct Include {
+    pub path: String,
+    pub line: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct DotEnv {
     pub path: String,
     pub line: usize,
 }

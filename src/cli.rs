@@ -18,6 +18,18 @@ pub struct Cli {
     #[arg(long)]
     pub init: bool,
 
+    /// Print the generated script without executing
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Path to a specific Taskfile
+    #[arg(short, long)]
+    pub file: Option<String>,
+
+    /// Generate shell completions (bash, zsh, fish)
+    #[arg(long, value_name = "SHELL")]
+    pub completions: Option<String>,
+
     /// Update to the latest version (or a specific version with --update=v0.2.0)
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     pub update: Option<String>,
