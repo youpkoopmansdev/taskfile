@@ -71,13 +71,18 @@ install_binary() {
 }
 
 fetch_latest_version() {
+  # Use the redirect from /releases/latest to avoid API rate limits
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-      | grep '"tag_name"' | head -1 | cut -d'"' -f4
+    url=$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest" 2>/dev/null)
   else
-    wget -qO- "https://api.github.com/repos/${REPO}/releases/latest" \
-      | grep '"tag_name"' | head -1 | cut -d'"' -f4
+    url=$(wget --max-redirect=0 -qO /dev/null "https://github.com/${REPO}/releases/latest" 2>&1 | grep -oP 'Location: \K\S+' || true)
   fi
+  version=$(echo "$url" | grep -oE '[^/]+$')
+  if [ -z "$version" ]; then
+    echo "Error: could not determine latest version. Check https://github.com/${REPO}/releases" >&2
+    exit 1
+  fi
+  echo "$version"
 }
 
 detect_platform() {

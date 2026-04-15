@@ -177,12 +177,17 @@ pub fn self_update(version: Option<&str>) {
 }
 
 fn fetch_latest_version() -> Option<String> {
+    // Use redirect from /releases/latest to avoid API rate limits
     let output = Command::new("curl")
         .args([
             "-fsSL",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{url_effective}",
             "--max-time",
             "5",
-            &format!("https://api.github.com/repos/{REPO}/releases/latest"),
+            &format!("https://github.com/{REPO}/releases/latest"),
         ])
         .output()
         .ok()?;
@@ -191,9 +196,11 @@ fn fetch_latest_version() -> Option<String> {
         return None;
     }
 
-    let body = String::from_utf8_lossy(&output.stdout);
-    // Simple JSON extraction — avoid adding serde just for this
-    let tag = body.split("\"tag_name\"").nth(1)?.split('"').nth(1)?;
+    let url = String::from_utf8_lossy(&output.stdout);
+    let tag = url.rsplit('/').next()?;
+    if tag.is_empty() {
+        return None;
+    }
 
     Some(tag.strip_prefix('v').unwrap_or(tag).to_string())
 }
