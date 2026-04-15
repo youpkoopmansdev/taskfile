@@ -4,8 +4,6 @@ A modern task runner that reads `Taskfile` files. Think of it as Make's task run
 
 ## Install
 
-Installs both the `task` CLI and `taskfile-lsp` language server:
-
 ```sh
 curl -fsSL https://raw.githubusercontent.com/youpkoopmansdev/taskfile/main/install/install.sh | sh
 ```
@@ -14,7 +12,6 @@ Or with Cargo:
 
 ```sh
 cargo install --git https://github.com/youpkoopmansdev/taskfile.git
-cargo install --git https://github.com/youpkoopmansdev/taskfile.git --name taskfile-lsp
 ```
 
 To update:
@@ -206,7 +203,7 @@ task down {
 Running `task` shows:
 
 ```
-Task 0.5.0
+Task 0.6.0
 
 Usage:
   task <name> [-- args...]
@@ -214,9 +211,11 @@ Usage:
 Options:
   --list, -l       List all available tasks
   --init           Create a new Taskfile
+  --discover       Discover tasks from project files
   --dry-run        Show the script without running it
   --file, -f       Use a specific Taskfile path
   --completions    Generate shell completions (bash, zsh, fish)
+  --update         Update to the latest version
   --help, -h       Show help
   --version, -v    Show version
 
@@ -274,7 +273,9 @@ task --completions zsh >> ~/.zshrc
 task --completions fish > ~/.config/fish/completions/task.fish
 ```
 
-## Getting started in a new project
+## Getting started
+
+### New project
 
 Run `task --init` (or just `task`) in your project directory:
 
@@ -288,35 +289,50 @@ This creates a Taskfile with documented examples covering exports, aliases, para
 
 If you simply run `task` without a Taskfile, it will interactively ask if you'd like to create one.
 
-## Task discovery
+### Existing project
 
-Run `task --discover` to scan your project and interactively generate tasks from existing configuration files:
+Run `task --discover` to scan your project and generate tasks from files that already exist:
 
 ```sh
+cd my-project
 task --discover
-# discover: Scanning /path/to/my-project...
-#
-#   ✓ package.json (Node.js) (8 tasks)
-#   ✓ docker-compose.yml (3 tasks)
-#
-# Select tasks to add:
-#   [1] dev — Start Vue dev server (from package.json)
-#   [2] build — Build for production (from package.json)
-#   ...
-#
-# Selection: 1-5
-# ✓ Added 5 tasks to Taskfile
 ```
 
-Supported project files:
-- **package.json** — npm/yarn/pnpm/bun scripts, framework detection (Vue, React, Next, Nuxt)
-- **Cargo.toml** — build, test, check, release (workspace-aware)
-- **docker-compose.yml** / **compose.yaml** — up, down, logs + per-service tasks
-- **Dockerfile** — build and run tasks
-- **Makefile** — ports existing make targets
-- **go.mod** — build, test, vet, lint
-- **pyproject.toml** / **requirements.txt** — Poetry, uv, pip, pytest detection
-- **Gemfile** — Rails, RSpec detection
+```
+discover: Scanning /path/to/my-project...
+
+  ✓ package.json (npm/yarn/pnpm) (6 tasks)
+  ✓ docker-compose.yml (8 tasks)
+
+Select tasks to add:
+  [1] dev — Start Vue/Nuxt dev server (from package.json)
+  [2] build — Build for production (from package.json)
+  [3] test — Run tests with Vitest (from package.json)
+  [4] lint — Run ESLint (from package.json)
+  [5] up — Start all services (from docker-compose.yml)
+  [6] down — Stop all services (from docker-compose.yml)
+  ...
+
+Selection (enter numbers to toggle, enter to confirm, q to cancel): 1-6
+✓ Created /path/to/my-project/Taskfile with 6 tasks
+```
+
+It detects your tools, extracts existing scripts/targets, and writes proper Taskfile tasks — no manual copy-pasting needed.
+
+**What it scans:**
+
+| File | What it discovers |
+|------|-------------------|
+| `package.json` | npm/yarn/pnpm/bun scripts, Vue/React/Next/Nuxt framework tasks |
+| `Cargo.toml` | build, test, clippy, release (workspace-aware) |
+| `docker-compose.yml` / `compose.yaml` | up, down, logs, restart + per-service tasks |
+| `Dockerfile` | docker build + run |
+| `Makefile` | all targets with their recipe bodies |
+| `go.mod` | build, test, vet, run |
+| `pyproject.toml` / `requirements.txt` | Poetry, uv, pip, pytest |
+| `Gemfile` | bundler, Rails, RSpec |
+
+Run it again after adding new tools — it skips tasks that already exist in your Taskfile.
 
 ## Taskfile discovery
 
@@ -330,21 +346,24 @@ task build -f ./other/Taskfile
 
 ## Editor support
 
-This repo includes a Language Server Protocol (LSP) server and IDE plugins for syntax highlighting, error checking, completions, hover docs, go-to-definition, and document symbols.
+IDE plugins provide syntax highlighting, error checking, completions, hover docs, go-to-definition, and document symbols.
 
 ### VS Code
 
-1. Download the `.vsix` file from the [latest release](https://github.com/youpkoopmansdev/taskfile/releases)
-2. In VS Code: `Extensions` → `...` → `Install from VSIX...`
+1. Go to the [latest release](https://github.com/youpkoopmansdev/taskfile/releases)
+2. Download the `taskfile-*.vsix` file
+3. In VS Code: open the Command Palette (`Cmd+Shift+P`) → `Extensions: Install from VSIX...` → select the downloaded file
 
-Or search for "Taskfile" in the VS Code Marketplace (once published).
+That's it — open any `Taskfile` or `*.Taskfile` and you'll get highlighting + full language support.
 
 ### JetBrains (RustRover, IntelliJ Ultimate, WebStorm, etc.)
 
-1. Download the `taskfile-jetbrains-*.zip` from the [latest release](https://github.com/youpkoopmansdev/taskfile/releases)
-2. In your IDE: `Settings` → `Plugins` → `⚙️` → `Install Plugin from Disk...`
+1. Go to the [latest release](https://github.com/youpkoopmansdev/taskfile/releases)
+2. Download the `taskfile-jetbrains-*.zip` file
+3. In your IDE: `Settings` → `Plugins` → `⚙️` → `Install Plugin from Disk...` → select the downloaded file
+4. Restart the IDE
 
-> **Note:** Requires a commercial JetBrains IDE — Community Edition does not support the LSP API.
+> **Note:** The LSP integration requires a commercial JetBrains IDE. Community Edition only gets syntax highlighting.
 
 ### Neovim
 
@@ -360,12 +379,18 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
 })
 ```
 
-### Other editors
-
-Any editor with LSP support can use `taskfile-lsp`. Start it with:
+The `taskfile-lsp` binary is included in the install script. If you installed with Cargo, install it separately:
 
 ```sh
-taskfile-lsp   # communicates over stdio
+cargo install --git https://github.com/youpkoopmansdev/taskfile.git --name taskfile-lsp
+```
+
+### Other editors
+
+Any editor with LSP support can use `taskfile-lsp`. It communicates over stdio:
+
+```sh
+taskfile-lsp
 ```
 
 ## License
