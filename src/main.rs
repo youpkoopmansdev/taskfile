@@ -1,4 +1,5 @@
 mod cli;
+mod discover;
 mod discovery;
 mod display;
 mod executor;
@@ -60,6 +61,16 @@ fn main() {
         } else {
             process::exit(1);
         }
+    }
+
+    // Handle --discover (no Taskfile needed)
+    if cli.discover {
+        let dir = std::env::current_dir().unwrap_or_else(|e| {
+            eprintln!("{} Cannot get current directory: {e}", "error:".red().bold());
+            process::exit(1);
+        });
+        discover::run_discover(&dir);
+        return;
     }
 
     // Background update check (non-blocking, once per day)

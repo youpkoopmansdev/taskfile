@@ -34,6 +34,10 @@ pub struct Cli {
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     pub update: Option<String>,
 
+    /// Discover project tasks from package.json, Cargo.toml, docker-compose, Makefile, etc.
+    #[arg(long)]
+    pub discover: bool,
+
     /// Arguments to pass to the task (after --)
     #[arg(last = true)]
     pub task_args: Vec<String>,

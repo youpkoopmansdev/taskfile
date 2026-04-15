@@ -69,6 +69,11 @@ pub fn print_help_with_tasks(registry: &HashMap<String, ResolvedTask>) {
         "Create a new Taskfile".dimmed()
     );
     println!(
+        "  {}     {}",
+        "--discover".green(),
+        "Discover tasks from project files".dimmed()
+    );
+    println!(
         "  {}      {}",
         "--dry-run".green(),
         "Show the script without running it".dimmed()
