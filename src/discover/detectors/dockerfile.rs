@@ -21,13 +21,13 @@ pub fn detect(dir: &Path) -> Vec<DiscoveredTask> {
 
     vec![
         DiscoveredTask {
-            name: "docker:build".into(),
+            name: "build".into(),
             description: "Build Docker image".into(),
             body: format!("docker build -t {project_name} ."),
             source: "Dockerfile".into(),
         },
         DiscoveredTask {
-            name: "docker:run".into(),
+            name: "run".into(),
             description: "Run Docker container".into(),
             body: format!("docker run --rm -it {project_name}"),
             source: "Dockerfile".into(),

@@ -4,9 +4,18 @@ mod json;
 mod prompt;
 mod writer;
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use colored::Colorize;
+
+use detector::DiscoveredTask;
+
+/// A group of tasks from a single detector category.
+struct TaskGroup {
+    category: String,
+    tasks: Vec<DiscoveredTask>,
+}
 
 /// Scan a project directory for discoverable tasks and interactively add them.
 pub fn run_discover(project_dir: &Path) {
@@ -16,17 +25,20 @@ pub fn run_discover(project_dir: &Path) {
         project_dir.display()
     );
 
-    let mut all_tasks = Vec::new();
+    let mut groups: Vec<TaskGroup> = Vec::new();
 
     for det in detectors::ALL {
         let tasks = (det.detect)(project_dir);
         if !tasks.is_empty() {
             eprintln!("  {} {} ({} tasks)", "✓".green(), det.name, tasks.len());
-            all_tasks.extend(tasks);
+            groups.push(TaskGroup {
+                category: det.category.to_string(),
+                tasks,
+            });
         }
     }
 
-    if all_tasks.is_empty() {
+    if groups.is_empty() {
         eprintln!(
             "\n{} No project files detected. Nothing to discover.",
             "info:".dimmed()
@@ -35,12 +47,21 @@ pub fn run_discover(project_dir: &Path) {
     }
 
     let existing = writer::load_existing_task_names(project_dir);
-    let new_tasks: Vec<_> = all_tasks
-        .into_iter()
-        .filter(|t| !existing.contains(&t.name))
+
+    // Build flat list with category tracking for selection
+    let indexed: Vec<(usize, usize)> = groups
+        .iter()
+        .enumerate()
+        .flat_map(|(gi, g)| {
+            g.tasks
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| !existing.contains(&t.name))
+                .map(move |(ti, _)| (gi, ti))
+        })
         .collect();
 
-    if new_tasks.is_empty() {
+    if indexed.is_empty() {
         eprintln!(
             "\n{} All discovered tasks already exist in your Taskfile.",
             "info:".dimmed()
@@ -48,11 +69,30 @@ pub fn run_discover(project_dir: &Path) {
         return;
     }
 
-    let indices = match prompt::select_tasks(&new_tasks) {
+    let display_tasks: Vec<&DiscoveredTask> = indexed
+        .iter()
+        .map(|&(gi, ti)| &groups[gi].tasks[ti])
+        .collect();
+
+    let categories: Vec<&str> = indexed
+        .iter()
+        .map(|&(gi, _)| groups[gi].category.as_str())
+        .collect();
+
+    let selected = match prompt::select_tasks(&display_tasks, &categories) {
         Some(idx) => idx,
         None => return,
     };
 
-    let chosen: Vec<_> = indices.iter().map(|&i| &new_tasks[i]).collect();
-    writer::write_tasks(project_dir, &chosen);
+    // Group selected tasks by category
+    let mut categorized: BTreeMap<String, Vec<&DiscoveredTask>> = BTreeMap::new();
+    for &i in &selected {
+        let (gi, ti) = indexed[i];
+        categorized
+            .entry(groups[gi].category.clone())
+            .or_default()
+            .push(&groups[gi].tasks[ti]);
+    }
+
+    writer::write_categorized(project_dir, &categorized);
 }

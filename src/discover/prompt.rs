@@ -5,10 +5,11 @@ use super::detector::DiscoveredTask;
 
 /// Shows an interactive checkbox selection UI and returns indices of chosen tasks.
 /// Returns `None` if the user cancels (Esc) or selects nothing.
-pub fn select_tasks(tasks: &[DiscoveredTask]) -> Option<Vec<usize>> {
+pub fn select_tasks(tasks: &[&DiscoveredTask], categories: &[&str]) -> Option<Vec<usize>> {
     let items: Vec<String> = tasks
         .iter()
-        .map(|t| format!("{} — {} (from {})", t.name, t.description, t.source))
+        .zip(categories.iter())
+        .map(|(t, cat)| format!("[{}] {} — {}", cat, t.name, t.description))
         .collect();
 
     let defaults = vec![true; tasks.len()];

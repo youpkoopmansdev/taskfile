@@ -54,19 +54,19 @@ pub fn detect(dir: &Path) -> Vec<DiscoveredTask> {
     for service in &services {
         let svc = sanitize_task_name(service);
         tasks.push(DiscoveredTask {
-            name: format!("{svc}:logs"),
+            name: format!("{svc}-logs"),
             description: format!("Tail logs for {service}"),
             body: format!("docker compose logs -f {service}"),
             source: format!("{filename} service: {service}"),
         });
         tasks.push(DiscoveredTask {
-            name: format!("{svc}:restart"),
+            name: format!("{svc}-restart"),
             description: format!("Restart {service}"),
             body: format!("docker compose restart {service}"),
             source: format!("{filename} service: {service}"),
         });
         tasks.push(DiscoveredTask {
-            name: format!("{svc}:shell"),
+            name: format!("{svc}-shell"),
             description: format!("Open shell in {service}"),
             body: format!("docker compose exec {service} sh"),
             source: format!("{filename} service: {service}"),
@@ -171,7 +171,7 @@ services:
         let names: Vec<&str> = tasks.iter().map(|t| t.name.as_str()).collect();
         assert!(names.contains(&"up"));
         assert!(names.contains(&"down"));
-        assert!(names.contains(&"app:logs"));
-        assert!(names.contains(&"db:shell"));
+        assert!(names.contains(&"app-logs"));
+        assert!(names.contains(&"db-shell"));
     }
 }

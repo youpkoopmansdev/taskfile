@@ -58,42 +58,27 @@ pub fn print_help_with_tasks(registry: &HashMap<String, ResolvedTask>) {
     println!("  task {} {}", "<name>".green(), "[-- args...]".dimmed());
     println!();
     println!("{}", "Options:".yellow().bold());
-    println!(
-        "  {}       {}",
-        "--list, -l".green(),
-        "List all available tasks".dimmed()
-    );
-    println!(
-        "  {}         {}",
-        "--init".green(),
-        "Create a new Taskfile".dimmed()
-    );
-    println!(
-        "  {}     {}",
-        "--discover".green(),
-        "Discover tasks from project files".dimmed()
-    );
-    println!(
-        "  {}      {}",
-        "--dry-run".green(),
-        "Show the script without running it".dimmed()
-    );
-    println!(
-        "  {}   {}",
-        "--file, -f".green(),
-        "Use a specific Taskfile path".dimmed()
-    );
-    println!(
-        "  {}  {}",
-        "--completions".green(),
-        "Generate shell completions (bash, zsh, fish)".dimmed()
-    );
-    println!("  {}       {}", "--help, -h".green(), "Show help".dimmed());
-    println!(
-        "  {}    {}",
-        "--version, -v".green(),
-        "Show version".dimmed()
-    );
+
+    let options: &[(&str, &str)] = &[
+        ("--list, -l", "List all available tasks"),
+        ("--init", "Create a new Taskfile"),
+        ("--discover", "Discover tasks from project files"),
+        ("--dry-run", "Show the script without running it"),
+        ("--file, -f", "Use a specific Taskfile path"),
+        (
+            "--completions",
+            "Generate shell completions (bash, zsh, fish)",
+        ),
+        ("--update", "Update to the latest version"),
+        ("--help, -h", "Show help"),
+        ("--version, -v", "Show version"),
+    ];
+    let max_opt = options.iter().map(|(f, _)| f.len()).max().unwrap_or(0);
+    for (flag, desc) in options {
+        let pad = max_opt - flag.len() + 2;
+        println!("  {}{}{}", flag.green(), " ".repeat(pad), desc.dimmed());
+    }
+
     println!();
     println!("{}", "Available tasks:".yellow().bold());
 

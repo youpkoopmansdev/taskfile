@@ -18,7 +18,7 @@ pub fn detect(dir: &Path) -> Vec<DiscoveredTask> {
     };
 
     let mut tasks = Vec::new();
-    let pm = detect_package_manager(dir);
+    let pm = detect_package_manager(dir, &content);
 
     let scripts = extract_json_object(&content, "scripts");
     for (name, command) in &scripts {
@@ -28,7 +28,7 @@ pub fn detect(dir: &Path) -> Vec<DiscoveredTask> {
         }
         tasks.push(DiscoveredTask {
             name: task_name,
-            description: format!("Run npm script: {name}"),
+            description: format!("Run {pm} script: {name}"),
             body: format!("{pm} run {name}"),
             source: format!("package.json scripts.{name} → {command}"),
         });
@@ -108,7 +108,17 @@ pub fn detect(dir: &Path) -> Vec<DiscoveredTask> {
     tasks
 }
 
-pub fn detect_package_manager(dir: &Path) -> &'static str {
+/// Detect the package manager for a Node.js project.
+///
+/// Checks in order:
+/// 1. `packageManager` field in package.json (e.g. `"packageManager": "bun@1.0.0"`)
+/// 2. Lock file presence (bun.lockb, pnpm-lock.yaml, yarn.lock)
+/// 3. Falls back to npm
+pub fn detect_package_manager(dir: &Path, package_json: &str) -> &'static str {
+    if let Some(pm) = extract_pm_from_field(package_json) {
+        return pm;
+    }
+
     if dir.join("bun.lockb").exists() || dir.join("bun.lock").exists() {
         "bun"
     } else if dir.join("pnpm-lock.yaml").exists() {
@@ -118,6 +128,30 @@ pub fn detect_package_manager(dir: &Path) -> &'static str {
     } else {
         "npm"
     }
+}
+
+fn extract_pm_from_field(content: &str) -> Option<&'static str> {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(pos) = trimmed.find("\"packageManager\"") {
+            let after_key = &trimmed[pos + "\"packageManager\"".len()..];
+            let val = after_key.trim_start().trim_start_matches(':').trim();
+            let val = val.trim_start_matches('"');
+            if val.starts_with("bun") {
+                return Some("bun");
+            }
+            if val.starts_with("pnpm") {
+                return Some("pnpm");
+            }
+            if val.starts_with("yarn") {
+                return Some("yarn");
+            }
+            if val.starts_with("npm") {
+                return Some("npm");
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -162,21 +196,49 @@ mod tests {
     #[test]
     fn detects_pnpm() {
         let tmp = setup();
+        fs::write(tmp.path().join("package.json"), "{}").unwrap();
         fs::write(tmp.path().join("pnpm-lock.yaml"), "").unwrap();
-        assert_eq!(detect_package_manager(tmp.path()), "pnpm");
+        assert_eq!(detect_package_manager(tmp.path(), "{}"), "pnpm");
     }
 
     #[test]
     fn detects_yarn() {
         let tmp = setup();
+        fs::write(tmp.path().join("package.json"), "{}").unwrap();
         fs::write(tmp.path().join("yarn.lock"), "").unwrap();
-        assert_eq!(detect_package_manager(tmp.path()), "yarn");
+        assert_eq!(detect_package_manager(tmp.path(), "{}"), "yarn");
     }
 
     #[test]
     fn detects_bun() {
         let tmp = setup();
+        fs::write(tmp.path().join("package.json"), "{}").unwrap();
         fs::write(tmp.path().join("bun.lockb"), "").unwrap();
-        assert_eq!(detect_package_manager(tmp.path()), "bun");
+        assert_eq!(detect_package_manager(tmp.path(), "{}"), "bun");
+    }
+
+    #[test]
+    fn detects_pm_from_package_manager_field() {
+        let tmp = setup();
+        let pkg = r#"{ "packageManager": "bun@1.2.0" }"#;
+        fs::write(tmp.path().join("package.json"), pkg).unwrap();
+        assert_eq!(detect_package_manager(tmp.path(), pkg), "bun");
+    }
+
+    #[test]
+    fn detects_pnpm_from_package_manager_field() {
+        let tmp = setup();
+        let pkg = r#"{ "packageManager": "pnpm@9.0.0" }"#;
+        fs::write(tmp.path().join("package.json"), pkg).unwrap();
+        assert_eq!(detect_package_manager(tmp.path(), pkg), "pnpm");
+    }
+
+    #[test]
+    fn package_manager_field_overrides_lockfile() {
+        let tmp = setup();
+        let pkg = r#"{ "packageManager": "pnpm@9.0.0" }"#;
+        fs::write(tmp.path().join("package.json"), pkg).unwrap();
+        fs::write(tmp.path().join("yarn.lock"), "").unwrap();
+        assert_eq!(detect_package_manager(tmp.path(), pkg), "pnpm");
     }
 }

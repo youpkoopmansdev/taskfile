@@ -12,35 +12,43 @@ use super::detector::Detector;
 /// All registered detectors, checked in order.
 pub const ALL: &[Detector] = &[
     Detector {
-        name: "package.json (npm/yarn/pnpm)",
+        name: "package.json (npm/yarn/pnpm/bun)",
+        category: "node",
         detect: node::detect,
     },
     Detector {
         name: "Cargo.toml (Rust)",
+        category: "rust",
         detect: rust::detect,
     },
     Detector {
         name: "docker-compose.yml",
+        category: "docker",
         detect: docker::detect,
     },
     Detector {
         name: "Dockerfile",
+        category: "docker",
         detect: dockerfile::detect,
     },
     Detector {
         name: "Makefile",
+        category: "make",
         detect: makefile::detect,
     },
     Detector {
         name: "go.mod (Go)",
+        category: "go",
         detect: go::detect,
     },
     Detector {
         name: "pyproject.toml / requirements.txt (Python)",
+        category: "python",
         detect: python::detect,
     },
     Detector {
         name: "Gemfile (Ruby)",
+        category: "ruby",
         detect: ruby::detect,
     },
 ];

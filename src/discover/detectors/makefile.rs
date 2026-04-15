@@ -57,7 +57,7 @@ pub fn detect(dir: &Path) -> Vec<DiscoveredTask> {
 
             let name = sanitize_task_name(target);
             tasks.push(DiscoveredTask {
-                name: format!("make:{name}"),
+                name,
                 description: format!("Makefile target: {target}"),
                 body,
                 source: "Makefile".into(),
@@ -84,8 +84,8 @@ mod tests {
 
         let tasks = detect(tmp.path());
         let names: Vec<&str> = tasks.iter().map(|t| t.name.as_str()).collect();
-        assert!(names.contains(&"make:build"));
-        assert!(names.contains(&"make:test"));
+        assert!(names.contains(&"build"));
+        assert!(names.contains(&"test"));
         assert!(!names.iter().any(|n| n.contains("PHONY")));
     }
 }

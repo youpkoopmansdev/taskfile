@@ -30,7 +30,7 @@ pub fn detect(dir: &Path) -> Vec<DiscoveredTask> {
             source: "Gemfile (Rails detected)".into(),
         });
         tasks.push(DiscoveredTask {
-            name: "db:migrate".into(),
+            name: "db-migrate".into(),
             description: "Run database migrations".into(),
             body: "bundle exec rails db:migrate".into(),
             source: "Gemfile (Rails detected)".into(),

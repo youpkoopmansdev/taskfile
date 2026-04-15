@@ -5,11 +5,13 @@ pub struct DiscoveredTask {
     pub name: String,
     pub description: String,
     pub body: String,
+    #[allow(dead_code)]
     pub source: String,
 }
 
 /// A detector that scans a project directory for a specific tool/framework.
 pub struct Detector {
     pub name: &'static str,
+    pub category: &'static str,
     pub detect: fn(&Path) -> Vec<DiscoveredTask>,
 }
