@@ -14,12 +14,23 @@ mod updater;
 use std::path::PathBuf;
 use std::process;
 
-use clap::{CommandFactory, Parser};
 use clap_complete::{Shell, generate};
 use colored::Colorize;
 
 fn main() {
-    let cli = cli::Cli::parse();
+    let cli = cli::Cli::parse_args();
+
+    // Handle --version
+    if cli.version {
+        println!("task {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
+    // Handle --help (basic usage, no Taskfile needed)
+    if cli.help {
+        display::print_basic_help();
+        return;
+    }
 
     // Handle --completions before anything else
     if let Some(shell) = &cli.completions {
@@ -44,13 +55,8 @@ fn main() {
     }
 
     // Handle --update before anything else (no Taskfile needed)
-    // Also catch `task -- --update` where clap puts it in task_args
-    if cli.update.is_some() || cli.task_args.iter().any(|a| a == "--update") {
-        let v = cli.update.as_deref().filter(|s| !s.is_empty()).or_else(|| {
-            cli.task_args
-                .iter()
-                .find_map(|a| a.strip_prefix("--update="))
-        });
+    if cli.update.is_some() {
+        let v = cli.update.as_deref().filter(|s| !s.is_empty());
         updater::self_update(v);
         return;
     }
@@ -65,7 +71,7 @@ fn main() {
     }
 
     // Handle --discover (no Taskfile needed)
-    if cli.discover || cli.task_args.iter().any(|a| a == "--discover") {
+    if cli.discover {
         let dir = std::env::current_dir().unwrap_or_else(|e| {
             eprintln!(
                 "{} Cannot get current directory: {e}",

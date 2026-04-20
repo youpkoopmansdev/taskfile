@@ -48,6 +48,17 @@ pub fn print_task_list(registry: &HashMap<String, ResolvedTask>) {
 }
 
 pub fn print_help_with_tasks(registry: &HashMap<String, ResolvedTask>) {
+    print_header_and_options();
+    println!();
+    println!("{}", "Available tasks:".yellow().bold());
+    print_task_list(registry);
+}
+
+pub fn print_basic_help() {
+    print_header_and_options();
+}
+
+fn print_header_and_options() {
     println!(
         "{} {}",
         "Task".green().bold(),
@@ -55,7 +66,7 @@ pub fn print_help_with_tasks(registry: &HashMap<String, ResolvedTask>) {
     );
     println!();
     println!("{}", "Usage:".yellow().bold());
-    println!("  task {} {}", "<name>".green(), "[-- args...]".dimmed());
+    println!("  task {} {}", "<name>".green(), "[args...]".dimmed());
     println!();
     println!("{}", "Options:".yellow().bold());
 
@@ -78,11 +89,6 @@ pub fn print_help_with_tasks(registry: &HashMap<String, ResolvedTask>) {
         let pad = max_opt - flag.len() + 2;
         println!("  {}{}{}", flag.green(), " ".repeat(pad), desc.dimmed());
     }
-
-    println!();
-    println!("{}", "Available tasks:".yellow().bold());
-
-    print_task_list(registry);
 }
 
 fn format_task_name(task: &ResolvedTask) -> String {
